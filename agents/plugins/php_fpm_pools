@@ -1,0 +1,64 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+# +------------------------------------------------------------------+
+# |             ____ _               _        __  __ _  __           |
+# |            / ___| |__   ___  ___| | __   |  \/  | |/ /           |
+# |           | |   | '_ \ / _ \/ __| |/ /   | |\/| | ' /            |
+# |           | |___| | | |  __/ (__|   <    | |  | | . \            |
+# |            \____|_| |_|\___|\___|_|\_\___|_|  |_|_|\_\           |
+# |                                                                  |
+# | Copyright Mathias Kettner 2016             mk@mathias-kettner.de |
+# +------------------------------------------------------------------+
+#
+# This file is part of Check_MK.
+# The official homepage is at http://mathias-kettner.de/check_mk.
+#
+# check_mk is free software;  you can redistribute it and/or modify it
+# under the  terms of the  GNU General Public License  as published by
+# the Free Software Foundation in version 2.  check_mk is  distributed
+# in the hope that it will be useful, but WITHOUT ANY WARRANTY;  with-
+# out even the implied warranty of  MERCHANTABILITY  or  FITNESS FOR A
+# PARTICULAR PURPOSE. See the  GNU General Public License for more de-
+# tails. You should have  received  a copy of the  GNU  General Public
+# License along with GNU Make; see the file  COPYING.  If  not,  write
+# to the Free Software Foundation, Inc., 51 Franklin St,  Fifth Floor,
+# Boston, MA 02110-1301 USA.
+
+# Check_MK-Agent-Plugin - php-fpm Status
+#
+# By default this plugin tries to detect all locally running php-fpm processes
+# and to monitor them. If this is not good for your environment you might
+# create an php-fpm.cfg file in MK_CONFDIR and populate the servers
+# list to prevent executing the detection mechanism.
+
+# sample configuration:
+# php_fpm = [
+#  "https://domain.tld/status",
+#  "https://domain2.tld/path/to/fpm_status",
+# ]
+
+import os, json, sys, urllib
+
+config_file=os.path.join(os.environ.get("MK_CONFDIR", "/etc/check_mk"), "php_fpm_pools.cfg")
+
+# None or list of urls.
+php_fpm = None
+
+if os.path.exists(config_file):
+    execfile(config_file)
+
+if not php_fpm:
+    sys.exit(0)
+
+sys.stdout.write('<<<php_fpm_pools>>>\n')
+for fpm_status_url in php_fpm:
+    try:
+        response = urllib.urlopen(fpm_status_url  + '?json')
+        data = json.loads(response.read())
+        pool_name = data.pop('pool', None)
+        pm_type = data.pop('process manager', None)
+        for key in data:
+            spaceless_key = "_".join( key.split() )
+            sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, spaceless_key, str(data[key])))
+    except Exception, e:
+        sys.stderr.write('Exception (%s): %s\n' % (fpm_status_url, e))
