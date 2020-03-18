@@ -1,0 +1,162 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+# +------------------------------------------------------------------+
+# |             ____ _               _        __  __ _  __           |
+# |            / ___| |__   ___  ___| | __   |  \/  | |/ /           |
+# |           | |   | '_ \ / _ \/ __| |/ /   | |\/| | ' /            |
+# |           | |___| | | |  __/ (__|   <    | |  | | . \            |
+# |            \____|_| |_|\___|\___|_|\_\___|_|  |_|_|\_\           |
+# |                                                                  |
+# | Copyright Mathias Kettner 2016             mk@mathias-kettner.de |
+# +------------------------------------------------------------------+
+#
+# This file is part of Check_MK.
+# The official homepage is at http://mathias-kettner.de/check_mk.
+#
+# check_mk is free software;  you can redistribute it and/or modify it
+# under the  terms of the  GNU General Public License  as published by
+# the Free Software Foundation in version 2.  check_mk is  distributed
+# in the hope that it will be useful, but WITHOUT ANY WARRANTY;  with-
+# out even the implied warranty of  MERCHANTABILITY  or  FITNESS FOR A
+# PARTICULAR PURPOSE. See the  GNU General Public License for more de-
+# tails. You should have  received  a copy of the  GNU  General Public
+# License along with GNU Make; see the file  COPYING.  If  not,  write
+# to the Free Software Foundation, Inc., 51 Franklin St,  Fifth Floor,
+# Boston, MA 02110-1301 USA.
+
+# Check_MK-Agent-Plugin - php-fpm Status
+#
+# By default this plugin tries to detect all locally running php-fpm processes
+# and to monitor them. If this is not good for your environment you might
+# create an php-fpm.cfg file in MK_CONFDIR and populate the servers
+# list to prevent executing the detection mechanism.
+
+# sample configuration:
+# php_fpm = [
+#  {"socket": "localhost:9000"},
+#  {"socket": "/var/run/php/path_to.sock", "path": "/fpm_status"},
+# ]
+
+import os, json, sys, socket, struct, traceback
+
+# thanks to Milosz Galazka for sharing this code
+# https://blog.sleeplessbeastie.eu/2019/04/01/how-to-display-php-fpm-pool-information-using-unix-socket-and-python-script/
+class FCGIStatusClient:
+    # FCGI protocol version
+    FCGI_VERSION = 1
+
+    # FCGI record types
+    FCGI_BEGIN_REQUEST = 1
+    FCGI_PARAMS = 4
+
+    # FCGI roles
+    FCGI_RESPONDER = 1
+
+    # FCGI header length
+    FCGI_HEADER_LENGTH = 8
+
+    def __init__(self, socket_path, socket_timeout = 5.0, status_path = "/status" ):
+        self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+        self.socket_path = socket_path
+        self.set_socket_timeout(socket_timeout)
+        self.status_path = status_path
+        self.request_id = 1
+
+        self.params = {
+            'SCRIPT_NAME': status_path,
+            'SCRIPT_FILENAME': status_path,
+            'QUERY_STRING': 'json',
+            'REQUEST_METHOD': 'GET',
+        }
+
+    def set_socket_timeout(self, timeout):
+        self.socket_timeout = timeout
+        self.socket.settimeout(self.socket_timeout)
+
+    def connect(self):
+        try:
+            self.socket.connect(self.socket_path)
+        except:
+            print(sys.exc_info()[1])
+            sys.exit(1)
+
+    def close(self):
+        self.socket.close()
+
+    def define_begin_request(self):
+        fcgi_begin_request = struct.pack("!HB5x", self.FCGI_RESPONDER, 0)
+        fcgi_header        = struct.pack("!BBHHBx", self.FCGI_VERSION, self.FCGI_BEGIN_REQUEST, self.request_id, len(fcgi_begin_request), 0)
+        self.fcgi_begin_request = fcgi_header + fcgi_begin_request
+
+    def define_parameters(self):
+        parameters = []
+        for name, value in self.params.items():
+            parameters.append(chr(len(name)) + chr(len(value)) + name + value)
+
+        parameters             = ''.join(parameters)
+        parameters_length      = len(parameters)
+        parameters_padding_req = parameters_length & 7
+        parameters_padding     = b'\x00' * parameters_padding_req
+
+        fcgi_header_start = struct.pack("!BBHHBx", self.FCGI_VERSION, self.FCGI_PARAMS, self.request_id, parameters_length , parameters_padding_req)
+        fcgi_header_end   = struct.pack("!BBHHBx", self.FCGI_VERSION, self.FCGI_PARAMS, self.request_id, 0, 0)
+        self.fcgi_params = fcgi_header_start  + parameters.encode() + parameters_padding + fcgi_header_end
+
+    def execute(self):
+        try:
+            self.socket.send(self.fcgi_begin_request)
+            self.socket.send(self.fcgi_params)
+
+            header = self.socket.recv(self.FCGI_HEADER_LENGTH)
+            fcgi_version, request_type, request_id, request_length, request_padding = struct.unpack("!BBHHBx", header)
+
+            if request_type == 6:
+                self.raw_status_data=self.socket.recv(request_length)
+            else:
+                self.raw_status_data = ""
+                if request_type == 7:
+                    raise Exception("Received an error packet.")
+                else:
+                    raise Exception("Received unexpected packet type.")
+        except:
+            print(sys.exc_info()[1])
+            sys.exit(2)
+        self.status_data = self.raw_status_data.decode().split("\r\n\r\n")[1]
+
+    def make_request(self):
+        self.define_begin_request()
+        self.define_parameters()
+        self.connect()
+        self.execute()
+        self.close()
+
+    def print_status(self):
+        data = json.loads(self.status_data)
+        pool_name = data.pop('pool', None)
+        pm_type = data.pop('process manager', None)
+        for key in data:
+            spaceless_key = "_".join( key.split() )
+            sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, spaceless_key, str(data[key])))
+
+config_file=os.path.join(os.environ.get("MK_CONFDIR", "/etc/check_mk"), "php_fpm_pools.cfg")
+
+# None or list of urls.
+php_fpm = None
+
+if os.path.exists(config_file):
+    execfile(config_file)
+
+if not php_fpm:
+    sys.exit(0)
+
+sys.stdout.write('<<<php_fpm_pools>>>\n')
+for fpm_status_raw in php_fpm:
+    try:
+        fpm_status = dict(fpm_status_raw)
+        fcgi_client = FCGIStatusClient( socket_path = fpm_status.get('socket'), status_path = fpm_status.get('path', '/status') )
+        fcgi_client.make_request()
+        fcgi_client.print_status()
+
+    except Exception as e:
+        print(traceback.format_exc())
+        sys.stderr.write('Exception (%s): %s\n' % (fpm_status.get('socket'), e))

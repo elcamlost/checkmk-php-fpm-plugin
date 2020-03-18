@@ -1,0 +1,42 @@
+title: Performance indicators of PHP-FPM pools
+agents: linux
+catalog: app/nginx
+license: GPL
+distribution: check_mk
+description:
+ This check parses the information provided by the php-fpm pool status page.
+ If you have set pm.status_path, then the configured URL {usually /status} shows interesting
+ information about the inner state of the fpm pool when accessed via fcgi directly.
+ The agent plugin {php_fpm} fetches these information and processes it.
+
+ Please note that the information provided only affect the configured pools within the server.
+
+ By default the check is always OK and outputs performace indicators including graphs.
+
+ First you need to set up 'pm.status_path' in pool settings to make it accessible, at least from localhost.
+ We recommend to do it like follows.
+
+ Make sure that all pools you want to monitor are configured with the 'pm.status_path' setting.
+ Then determine pools listen socket (see 'listen' directive value).
+
+ For example, you want to monitor standard {/run/php/php-fpm.sock} and set up default 'pm.status_path' value '/status'.
+ 
+ Afterwards execute {systemctl restart php-fpm} to apply this change. This makes
+ the socket {/run/php/php-fpm.sock} available via fcgi.
+ You can test this by requesting this socket via cgi-fcgi CLI tool.
+ {SCRIPT_NAME=/status SCRIPT_FILENAME=/status QUERY_STRING= REQUEST_METHOD=GET cgi-fcgi -bind -connect /run/php/php-fpm.sock}.
+ This should give you an output of something like {pool: www ...}.
+
+ Once this works, you need to install the agent plugin {php_fom} into your
+ agent's plugins directory (usually {/usr/lib/check_mk_agent/plugins}).
+ The plugin has no autodetection capabilities and enforce you to place config file into $MK_CONFDIR.
+ Usually {/etc/check_mk/php_fpm_pools.cfg} and configure your servers in that file.
+
+ To continue with our example, file should look like this.
+ {php_fpm = [ {'socket': '/run/php/php-fpm.sock', 'path': '/status'} ]}
+
+inventory:
+ One service per configured php-fpm pool will be created.
+
+item:
+ A dict with socket and optional path. Default value for 'path' key is '/status'.

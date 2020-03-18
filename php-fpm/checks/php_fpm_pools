@@ -1,0 +1,114 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+# +------------------------------------------------------------------+
+# |             ____ _               _        __  __ _  __           |
+# |            / ___| |__   ___  ___| | __   |  \/  | |/ /           |
+# |           | |   | '_ \ / _ \/ __| |/ /   | |\/| | ' /            |
+# |           | |___| | | |  __/ (__|   <    | |  | | . \            |
+# |            \____|_| |_|\___|\___|_|\_\___|_|  |_|_|\_\           |
+# |                                                                  |
+# | Copyright Mathias Kettner 2016             mk@mathias-kettner.de |
+# +------------------------------------------------------------------+
+#
+# This file is part of Check_MK.
+# The official homepage is at http://mathias-kettner.de/check_mk.
+#
+# check_mk is free software;  you can redistribute it and/or modify it
+# under the  terms of the  GNU General Public License  as published by
+# the Free Software Foundation in version 2.  check_mk is  distributed
+# in the hope that it will be useful, but WITHOUT ANY WARRANTY;  with-
+# out even the implied warranty of  MERCHANTABILITY  or  FITNESS FOR A
+# PARTICULAR PURPOSE. See the  GNU General Public License for more de-
+# ails.  You should have  received  a copy of the  GNU  General Public
+# License along with GNU Make; see the file  COPYING.  If  not,  write
+# to the Free Software Foundation, Inc., 51 Franklin St,  Fifth Floor,
+# Boston, MA 02110-1301 USA.
+
+# <<<php_fpm_pools>>>
+# www dynamic active_processes 1
+# www dynamic accepted_conn 726
+# www dynamic listen_queue 0
+# www dynamic start_since 79602
+# www dynamic idle_processes 1
+# www dynamic start_time 1545257568
+# www dynamic slow_requests 0
+# www dynamic max_active_processes 2
+# www dynamic max_children_reached 0
+# www dynamic max_listen_queue 0
+# www dynamic total_processes 2
+
+
+def php_fpm_pools_parse(info):
+    data = {}
+    for i, line in enumerate(info):
+        if len(line) != 4:
+            continue # Skip unexpected lines
+        pool_name, pm_type, metric, value = line
+        item = '%s [%s]' % (pool_name, pm_type)
+        if item not in data:
+            data[item] = {}
+
+        data[item][metric] = int(value)
+
+    return data
+
+def inventory_php_fpm_pools(info):
+    data = php_fpm_pools_parse(info)
+    inv = []
+    for item in data.keys():
+        inv.append((item, {}))
+    return inv
+
+def check_php_fpm_pools(item, params, info):
+    if params is None:
+        params = {}
+
+    all_data = php_fpm_pools_parse(info)
+    if item not in all_data:
+        return 3, 'Unable to find instance in agent output'
+    data = all_data[item]
+
+    perfkeys = [
+        'active_processes', 'idle_processes', 'max_active_processes',
+        'max_children_reached', 'slow_requests', 'listen_queue', 'max_listen_queue',
+    ]
+    # Add some more values, derived from the raw ones...
+    this_time = int(time.time())
+    for key in ['accepted_conn', 'max_children_reached', 'slow_requests']:
+        per_sec = get_rate("nginx_status.%s" % key, this_time, data[key])
+        data['%s_per_sec' % key] = per_sec
+        perfkeys.append('%s_per_sec' % key)
+
+    perfdata = []
+    for i, key in enumerate(perfkeys):
+        perfdata.append( (key, data[key]) )
+    perfdata.sort()
+
+    worst_state = 0
+
+    proc_warn, proc_crit = params.get('active_processes', (None, None))
+    proc_txt = ''
+    if proc_crit is not None and data['active_processes'] > proc_crit:
+        worst_state = max(worst_state, 2)
+        proc_txt = ' (!!)'
+    elif proc_warn is not None and data['active_processes'] > proc_warn:
+        worst_state = max(worst_state, 1)
+        proc_txt = ' (!)'
+
+    output = [
+        'Active: %d%s (%d idle, %d waiting)' % (
+            data['active_processes'], proc_txt, data['idle_processes'], data['listen_queue'],
+        ),
+        'Started %s ago' % (get_age_human_readable(data['start_since'])),
+        'Requests: %0.2f/s' % (data['accepted_conn_per_sec']),
+    ]
+
+    return worst_state, ', '.join(output), perfdata
+
+check_info['php_fpm_pools'] = {
+    "check_function" :      check_php_fpm_pools,
+    "inventory_function" :  inventory_php_fpm_pools,
+    "service_description" : "PHP-FPM Pool %s Status",
+    "has_perfdata" :        True,
+    "group" :               "php_fpm_pools"
+}
