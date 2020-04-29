@@ -33,7 +33,7 @@
 
 # sample configuration:
 # php_fpm = [
-#  {"socket": "localhost:9000"},
+#  {"socket": ("localhost", 9000)},
 #  {"socket": "/var/run/php/path_to.sock", "path": "/fpm_status"},
 # ]
 
@@ -56,9 +56,13 @@ class FCGIStatusClient:
     FCGI_HEADER_LENGTH = 8
 
     def __init__(self, socket_path, socket_timeout = 5.0, status_path = "/status" ):
-        self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        self.socket_path = socket_path
-        self.set_socket_timeout(socket_timeout)
+        # socket_path of type tuple is TCP
+        if type(socket_path) is tuple:
+            self.socket = socket.create_connection(socket_path, socket_timeout)
+        else:
+            self.socket = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            self.socket.settimeout(socket_timeout)
+            self.socket.connect(socket_path)
         self.status_path = status_path
         self.request_id = 1
 
@@ -68,17 +72,6 @@ class FCGIStatusClient:
             'QUERY_STRING': 'json',
             'REQUEST_METHOD': 'GET',
         }
-
-    def set_socket_timeout(self, timeout):
-        self.socket_timeout = timeout
-        self.socket.settimeout(self.socket_timeout)
-
-    def connect(self):
-        try:
-            self.socket.connect(self.socket_path)
-        except:
-            print(sys.exc_info()[1])
-            sys.exit(1)
 
     def close(self):
         self.socket.close()
@@ -112,31 +105,31 @@ class FCGIStatusClient:
 
             if request_type == 6:
                 self.raw_status_data=self.socket.recv(request_length)
+                self.status_data = self.raw_status_data.decode().split("\r\n\r\n")[1]
             else:
                 self.raw_status_data = ""
                 if request_type == 7:
                     raise Exception("Received an error packet.")
                 else:
                     raise Exception("Received unexpected packet type.")
-        except:
-            print(sys.exc_info()[1])
-            sys.exit(2)
-        self.status_data = self.raw_status_data.decode().split("\r\n\r\n")[1]
+
+        except Exception as e:
+            sys.stderr.write(str(e) + "\n")
 
     def make_request(self):
         self.define_begin_request()
         self.define_parameters()
-        self.connect()
         self.execute()
         self.close()
 
     def print_status(self):
-        data = json.loads(self.status_data)
-        pool_name = data.pop('pool', None)
-        pm_type = data.pop('process manager', None)
-        for key in data:
-            spaceless_key = "_".join( key.split() )
-            sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, spaceless_key, str(data[key])))
+        if hasattr(self, 'status_data'):
+            data = json.loads(self.status_data)
+            pool_name = data.pop('pool', None)
+            pm_type = data.pop('process manager', None)
+            for key in data:
+                spaceless_key = "_".join( key.split() )
+                sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, spaceless_key, str(data[key])))
 
 config_file=os.path.join(os.environ.get("MK_CONFDIR", "/etc/check_mk"), "php_fpm_pools.cfg")
 
@@ -147,7 +140,8 @@ if os.path.exists(config_file):
     execfile(config_file)
 
 if not php_fpm:
-    sys.exit(0)
+    print("Config file does not exist or is empty!")
+    sys.exit(3)
 
 sys.stdout.write('<<<php_fpm_pools>>>\n')
 for fpm_status_raw in php_fpm:
@@ -158,5 +152,4 @@ for fpm_status_raw in php_fpm:
         fcgi_client.print_status()
 
     except Exception as e:
-        print(traceback.format_exc())
         sys.stderr.write('Exception (%s): %s\n' % (fpm_status.get('socket'), e))
