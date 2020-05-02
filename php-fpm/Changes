@@ -1,0 +1,6 @@
+0.2  2020-05-02
+  - add tcp socket support (simon-mueller).
+  - fix man page
+
+0.1  2020-03-18
+  - initial release with unix sockets support
