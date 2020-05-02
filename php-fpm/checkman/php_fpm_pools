@@ -1,17 +1,17 @@
 title: Performance indicators of PHP-FPM pools
 agents: linux
-catalog: app/nginx
+catalog: app/
 license: GPL
 distribution: check_mk
 description:
  This check parses the information provided by the php-fpm pool status page.
  If you have set pm.status_path, then the configured URL {usually /status} shows interesting
  information about the inner state of the fpm pool when accessed via fcgi directly.
- The agent plugin {php_fpm} fetches these information and processes it.
+ The agent plugin {php_fpm_pools} fetches these information and processes it.
 
  Please note that the information provided only affect the configured pools within the server.
 
- By default the check is always OK and outputs performace indicators including graphs.
+ By default the check is always OK and outputs performance indicators including graphs.
 
  First you need to set up 'pm.status_path' in pool settings to make it accessible, at least from localhost.
  We recommend to do it like follows.
@@ -27,10 +27,10 @@ description:
  {SCRIPT_NAME=/status SCRIPT_FILENAME=/status QUERY_STRING= REQUEST_METHOD=GET cgi-fcgi -bind -connect /run/php/php-fpm.sock}.
  This should give you an output of something like {pool: www ...}.
 
- Once this works, you need to install the agent plugin {php_fom} into your
+ Once this works, you need to install the agent plugin {php_fpm_pools} into your
  agent's plugins directory (usually {/usr/lib/check_mk_agent/plugins}).
  The plugin has no autodetection capabilities and enforce you to place config file into $MK_CONFDIR.
- Usually {/etc/check_mk/php_fpm_pools.cfg} and configure your servers in that file.
+ Usually {/etc/check_mk/php_fpm_pools.cfg} and configure your pools in that file.
 
  To continue with our example, file should look like this.
  {php_fpm = [ {'socket': '/run/php/php-fpm.sock', 'path': '/status'} ]}
