@@ -1,0 +1,29 @@
+#!/usr/bin/env python
+# -*- encoding: utf-8; py-indent-offset: 4 -*-
+
+def bake_php_fpm_pools(opsys, conf, conf_dir, plugins_dir):
+    if opsys == "linux":
+        target_dir = plugins_dir
+        if 'interval' in conf:
+            target_dir = plugins_dir + "/%d" % conf["interval"]
+            if not os.path.exists(target_dir):
+                os.makedirs(target_dir)
+        shutil.copy2(cmk.utils.paths.local_agents_dir + "/plugins/php_fpm_pools", target_dir + "/php_fpm_pools")
+        f = file(conf_dir + "/php_fpm_pools.cfg", "w")
+        f.write(agent_file_header)
+
+        f.write("php_fpm = [\n")
+
+        if 'sockets' in conf:
+            for sockettype, params in conf['sockets']:
+                if sockettype == 'unix':
+                    f.write("\t{{\"socket\": \"{}\", \"path\": \"{}\"}},\n".format(params[0], params[1]))                                                                                                                            
+                elif sockettype == 'tcp':
+                    f.write("\t{{\"socket\": (\"{}\", {})}},\n".format(params[0], params[1]))
+
+        f.write("]")
+
+bakery_info["php_fpm_pools"] = {
+    "bake_function" : bake_php_fpm_pools,
+    "os"            : [ "linux" ],
+}
