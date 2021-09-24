@@ -28,7 +28,7 @@
 #
 # By default this plugin tries to detect all locally running php-fpm processes
 # and to monitor them. If this is not good for your environment you might
-# create an php-fpm.cfg file in MK_CONFDIR and populate the servers
+# create an php_fpm_pools.cfg file in MK_CONFDIR and populate the servers
 # list to prevent executing the detection mechanism.
 
 # sample configuration:
