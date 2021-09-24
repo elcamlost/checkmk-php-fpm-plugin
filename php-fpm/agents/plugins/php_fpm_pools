@@ -137,7 +137,9 @@ config_file=os.path.join(os.environ.get("MK_CONFDIR", "/etc/check_mk"), "php_fpm
 php_fpm = None
 
 if os.path.exists(config_file):
-    execfile(config_file)
+    with open(config_file, "rb") as source_file:
+        conf = compile(source_file.read(), config_file, "exec")
+    exec(conf)
 
 if not php_fpm:
     print("Config file does not exist or is empty!")
