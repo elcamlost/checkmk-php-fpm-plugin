@@ -29,11 +29,7 @@ description:
 
  Once this works, you need to install the agent plugin {php_fpm_pools} into your
  agent's plugins directory (usually {/usr/lib/check_mk_agent/plugins}).
- The plugin has no autodetection capabilities and enforce you to place config file into $MK_CONFDIR.
- Usually {/etc/check_mk/php_fpm_pools.cfg} and configure your pools in that file.
-
- To continue with our example, file should look like this.
- {php_fpm = [ {'socket': '/run/php/php-fpm.sock', 'path': '/status'} ]}
+ The plugin autodetects running php-fpm processes and parses their configs to find their socket and correct pm.status_path.
 
 inventory:
  One service per configured php-fpm pool will be created.

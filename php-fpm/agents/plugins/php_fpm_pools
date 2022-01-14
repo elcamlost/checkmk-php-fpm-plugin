@@ -31,13 +31,15 @@
 # create an php_fpm_pools.cfg file in MK_CONFDIR and populate the servers
 # list to prevent executing the detection mechanism.
 
-# sample configuration:
-# php_fpm = [
-#  {"socket": ("localhost", 9000)},
-#  {"socket": "/var/run/php/path_to.sock", "path": "/fpm_status"},
-# ]
+import configparser
+import json
+import re
+import socket
+import struct
+import sys
 
-import os, json, sys, socket, struct, traceback
+from glob import iglob as glob
+
 
 # thanks to Milosz Galazka for sharing this code
 # https://blog.sleeplessbeastie.eu/2019/04/01/how-to-display-php-fpm-pool-information-using-unix-socket-and-python-script/
@@ -131,27 +133,60 @@ class FCGIStatusClient:
                 spaceless_key = "_".join( key.split() )
                 sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, spaceless_key, str(data[key])))
 
-config_file=os.path.join(os.environ.get("MK_CONFDIR", "/etc/check_mk"), "php_fpm_pools.cfg")
 
-# None or list of urls.
-php_fpm = None
+def parse_includes(filename):
+    """
+    Yield lines in filename, recursively parsing include= lines
+    """
+    with open(filename) as f:
+        for line in f:
+            if line.strip().startswith('include'):
+                include = line.split('=', 1)[1].strip()
+                for f in glob(include):
+                    yield from parse_includes(f)
+            else:
+                yield line
 
-if os.path.exists(config_file):
-    with open(config_file, "rb") as source_file:
-        conf = compile(source_file.read(), config_file, "exec")
-    exec(conf)
 
-if not php_fpm:
-    print("Config file does not exist or is empty!")
-    sys.exit(3)
+def parse_fpm_config(f):
+    """
+    Parse php-fpm config, yielding dicts with status socket info
+    """
+    config = configparser.ConfigParser()
+    config.read_file(f)
+
+    for name in config.sections():
+        section = config[name]
+        try:
+            yield {
+                "socket": section['listen'],
+                "path": section['pm.status_path'],
+            }
+        except KeyError:
+            pass
+
+
+def discover_fpm():
+    """
+    Find running php-fpm processes, yielding their config file paths
+    """
+    pattern = re.compile(r'php-fpm: master process \((.*)\)$')
+    for f in glob('/proc/[0-9]*/cmdline'):
+        with open(f) as fp:
+            cmdline = fp.readline()
+            match = pattern.match(cmdline)
+            if match:
+                yield match.group(1)
+
 
 sys.stdout.write('<<<php_fpm_pools>>>\n')
-for fpm_status_raw in php_fpm:
-    try:
-        fpm_status = dict(fpm_status_raw)
-        fcgi_client = FCGIStatusClient( socket_path = fpm_status.get('socket'), status_path = fpm_status.get('path', '/status') )
-        fcgi_client.make_request()
-        fcgi_client.print_status()
+for configfile in discover_fpm():
+    for fpm_status_raw in parse_fpm_config(parse_includes(configfile)):
+        try:
+            fpm_status = dict(fpm_status_raw)
+            fcgi_client = FCGIStatusClient( socket_path = fpm_status.get('socket'), status_path = fpm_status.get('path', '/status') )
+            fcgi_client.make_request()
+            fcgi_client.print_status()
 
-    except Exception as e:
-        sys.stderr.write('Exception (%s): %s\n' % (fpm_status.get('socket'), e))
+        except Exception as e:
+            sys.stderr.write('Exception (%s): %s\n' % (fpm_status.get('socket'), e))
