@@ -174,7 +174,7 @@ def discover_fpm():
     for f in glob('/proc/[0-9]*/cmdline'):
         with open(f) as fp:
             cmdline = fp.readline()
-            match = pattern.match(cmdline)
+            match = pattern.match(cmdline.strip('\0'))
             if match:
                 yield match.group(1)
 
