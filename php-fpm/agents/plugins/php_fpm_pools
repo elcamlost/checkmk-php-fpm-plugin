@@ -99,25 +99,28 @@ class FCGIStatusClient:
         self.fcgi_params = fcgi_header_start  + parameters.encode() + parameters_padding + fcgi_header_end
 
     def execute(self):
-        try:
-            self.socket.send(self.fcgi_begin_request)
-            self.socket.send(self.fcgi_params)
+        self.status_data = b""
+        self.socket.send(self.fcgi_begin_request)
+        self.socket.send(self.fcgi_params)
 
+        while True:
             header = self.socket.recv(self.FCGI_HEADER_LENGTH)
             fcgi_version, request_type, request_id, request_length, request_padding = struct.unpack("!BBHHBx", header)
 
-            if request_type == 6:
-                self.raw_status_data=self.socket.recv(request_length)
-                self.status_data = self.raw_status_data.decode().split("\r\n\r\n")[1]
-            else:
-                self.raw_status_data = ""
-                if request_type == 7:
-                    raise Exception("Received an error packet.")
-                else:
-                    raise Exception("Received unexpected packet type.")
+            if request_type == 3:
+                break
+            elif request_type in (6, 7):
+                raw_status_data = b""
+                while len(raw_status_data) < request_length:
+                    raw_status_data += self.socket.recv(request_length - len(raw_status_data))
+                self.socket.recv(request_padding)
+                self.status_data += raw_status_data
 
-        except Exception as e:
-            sys.stderr.write(str(e) + "\n")
+            if request_type == 7:
+                raise Exception("Received an error packet: " +
+                self.status_data.decode('ascii'))
+            elif request_type not in (3, 6):
+                raise Exception("Received unexpected packet type: " + str(request_type))
 
     def make_request(self):
         self.define_begin_request()
@@ -127,7 +130,7 @@ class FCGIStatusClient:
 
     def print_status(self):
         if hasattr(self, 'status_data'):
-            data = json.loads(self.status_data)
+            data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1])
             pool_name = data.pop('pool', None)
             pm_type = data.pop('process manager', None)
             for key in data:
