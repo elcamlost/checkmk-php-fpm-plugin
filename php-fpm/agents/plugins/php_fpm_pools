@@ -196,9 +196,10 @@ def discover_fpm():
 
 sys.stdout.write('<<<php_fpm_pools>>>\n')
 for configfile in discover_fpm():
-    for fpm_status_raw in parse_fpm_config(parse_includes(configfile)):
+    for fpm_status in parse_fpm_config(parse_includes(configfile)):
+        if not fpm_status.get('path'):
+            continue
         try:
-            fpm_status = dict(fpm_status_raw)
             fcgi_client = FCGIStatusClient( socket_path = fpm_status.get('socket'), status_path = fpm_status.get('path', '/status') )
             fcgi_client.make_request()
             fcgi_client.print_status()
