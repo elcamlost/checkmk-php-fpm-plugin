@@ -37,6 +37,7 @@ import re
 import socket
 import struct
 import sys
+import os
 
 from glob import iglob as glob
 
@@ -157,13 +158,24 @@ def parse_fpm_config(f):
 
     for name in config.sections():
         section = config[name]
-        try:
-            yield {
-                "socket": section['listen'],
-                "path": section['pm.status_path'],
-            }
-        except KeyError:
-            pass
+        if 'listen' not in section:
+            continue
+
+        listen = section['listen']
+        if listen and not listen.startswith('/'):
+            if 'prefix' in section:
+                listen = os.path.join(section['prefix'], listen)
+            else:
+                # we cannot infer the relative listen anchor
+                continue
+
+        if listen:
+            listen = listen.replace('$pool', name)
+
+        yield {
+            "socket": listen,
+            "path": section.get('pm.status_path'),
+        }
 
 
 def discover_fpm():
