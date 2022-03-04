@@ -1,6 +1,6 @@
 PKG = php_fpm
 CONTAINER = checkmk-${PKG}
-IMAGE = checkmk/check-mk-raw:1.6.0p11
+IMAGE = checkmk/check-mk-raw:2.0.0p21
 DIRS = $(shell ls -d ${PWD}/php-fpm/*/)
 MKP = $(shell docker exec -u cmk checkmk-php_fpm bash -c "ls -1 ~/*mkp")
 

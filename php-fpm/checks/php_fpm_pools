@@ -52,18 +52,17 @@ def php_fpm_pools_parse(info):
 
     return data
 
-def inventory_php_fpm_pools(info):
-    data = php_fpm_pools_parse(info)
+def inventory_php_fpm_pools(parsed):
     inv = []
-    for item in data.keys():
+    for item in parsed.keys():
         inv.append((item, {}))
     return inv
 
-def check_php_fpm_pools(item, params, info):
+def check_php_fpm_pools(item, params, parsed):
     if params is None:
         params = {}
 
-    all_data = php_fpm_pools_parse(info)
+    all_data = parsed
     if item not in all_data:
         return 3, 'Unable to find instance in agent output'
     data = all_data[item]
@@ -103,9 +102,10 @@ def check_php_fpm_pools(item, params, info):
         'Requests: %0.2f/s' % (data['accepted_conn_per_sec']),
     ]
 
-    return worst_state, ', '.join(output), perfdata
+    yield worst_state, ', '.join(output), perfdata
 
 check_info['php_fpm_pools'] = {
+    "parse_function":       php_fpm_pools_parse,
     "check_function" :      check_php_fpm_pools,
     "inventory_function" :  inventory_php_fpm_pools,
     "service_description" : "PHP-FPM Pool %s Status",

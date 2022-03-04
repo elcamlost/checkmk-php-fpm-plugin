@@ -1,3 +1,7 @@
+1.0 2022-03-04
+  - add autodiscovery
+  - fix cmk2 compatibility
+
 0.2  2020-05-02
   - add tcp socket support (simon-mueller).
   - fix man page

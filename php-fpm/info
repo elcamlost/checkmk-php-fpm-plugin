@@ -18,7 +18,7 @@
  'name': 'php_fpm',
  'num_files': 5,
  'title': 'PHP-FPM monitoring',
- 'version': '0.20',
- 'version.min_required': '1.6.0p1',
- 'version.packaged': '1.6.0p11',
+ 'version': '1.0',
+ 'version.min_required': '2.0.0p1',
+ 'version.packaged': '2.0.0p21',
  'version.usable_until': None}
