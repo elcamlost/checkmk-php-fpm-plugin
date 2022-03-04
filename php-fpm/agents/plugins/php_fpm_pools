@@ -31,13 +31,16 @@
 # create an php_fpm_pools.cfg file in MK_CONFDIR and populate the servers
 # list to prevent executing the detection mechanism.
 
-# sample configuration:
-# php_fpm = [
-#  {"socket": ("localhost", 9000)},
-#  {"socket": "/var/run/php/path_to.sock", "path": "/fpm_status"},
-# ]
+import configparser
+import json
+import re
+import socket
+import struct
+import sys
+import os
 
-import os, json, sys, socket, struct, traceback
+from glob import iglob as glob
+
 
 # thanks to Milosz Galazka for sharing this code
 # https://blog.sleeplessbeastie.eu/2019/04/01/how-to-display-php-fpm-pool-information-using-unix-socket-and-python-script/
@@ -96,25 +99,28 @@ class FCGIStatusClient:
         self.fcgi_params = fcgi_header_start  + parameters.encode() + parameters_padding + fcgi_header_end
 
     def execute(self):
-        try:
-            self.socket.send(self.fcgi_begin_request)
-            self.socket.send(self.fcgi_params)
+        self.status_data = b""
+        self.socket.send(self.fcgi_begin_request)
+        self.socket.send(self.fcgi_params)
 
+        while True:
             header = self.socket.recv(self.FCGI_HEADER_LENGTH)
             fcgi_version, request_type, request_id, request_length, request_padding = struct.unpack("!BBHHBx", header)
 
-            if request_type == 6:
-                self.raw_status_data=self.socket.recv(request_length)
-                self.status_data = self.raw_status_data.decode().split("\r\n\r\n")[1]
-            else:
-                self.raw_status_data = ""
-                if request_type == 7:
-                    raise Exception("Received an error packet.")
-                else:
-                    raise Exception("Received unexpected packet type.")
+            if request_type == 3:
+                break
+            elif request_type in (6, 7):
+                raw_status_data = b""
+                while len(raw_status_data) < request_length:
+                    raw_status_data += self.socket.recv(request_length - len(raw_status_data))
+                self.socket.recv(request_padding)
+                self.status_data += raw_status_data
 
-        except Exception as e:
-            sys.stderr.write(str(e) + "\n")
+            if request_type == 7:
+                raise Exception("Received an error packet: " +
+                self.status_data.decode('ascii'))
+            elif request_type not in (3, 6):
+                raise Exception("Received unexpected packet type: " + str(request_type))
 
     def make_request(self):
         self.define_begin_request()
@@ -124,34 +130,79 @@ class FCGIStatusClient:
 
     def print_status(self):
         if hasattr(self, 'status_data'):
-            data = json.loads(self.status_data)
+            data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1])
             pool_name = data.pop('pool', None)
             pm_type = data.pop('process manager', None)
             for key in data:
                 spaceless_key = "_".join( key.split() )
                 sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, spaceless_key, str(data[key])))
 
-config_file=os.path.join(os.environ.get("MK_CONFDIR", "/etc/check_mk"), "php_fpm_pools.cfg")
 
-# None or list of urls.
-php_fpm = None
+def parse_includes(filename):
+    """
+    Yield lines in filename, recursively parsing include= lines
+    """
+    with open(filename) as f:
+        for line in f:
+            if line.strip().startswith('include'):
+                include = line.split('=', 1)[1].strip()
+                for f in glob(include):
+                    yield from parse_includes(f)
+            else:
+                yield line
 
-if os.path.exists(config_file):
-    with open(config_file, "rb") as source_file:
-        conf = compile(source_file.read(), config_file, "exec")
-    exec(conf)
 
-if not php_fpm:
-    print("Config file does not exist or is empty!")
-    sys.exit(3)
+def parse_fpm_config(f):
+    """
+    Parse php-fpm config, yielding dicts with status socket info
+    """
+    config = configparser.ConfigParser()
+    config.read_file(f)
+
+    for name in config.sections():
+        section = config[name]
+        if 'listen' not in section:
+            continue
+
+        listen = section['listen']
+        if listen and not listen.startswith('/'):
+            if 'prefix' in section:
+                listen = os.path.join(section['prefix'], listen)
+            else:
+                # we cannot infer the relative listen anchor
+                continue
+
+        if listen:
+            listen = listen.replace('$pool', name)
+
+        yield {
+            "socket": listen,
+            "path": section.get('pm.status_path'),
+        }
+
+
+def discover_fpm():
+    """
+    Find running php-fpm processes, yielding their config file paths
+    """
+    pattern = re.compile(r'php-fpm: master process \((.*)\)$')
+    for f in glob('/proc/[0-9]*/cmdline'):
+        with open(f) as fp:
+            cmdline = fp.readline()
+            match = pattern.match(cmdline.strip('\0'))
+            if match:
+                yield match.group(1)
+
 
 sys.stdout.write('<<<php_fpm_pools>>>\n')
-for fpm_status_raw in php_fpm:
-    try:
-        fpm_status = dict(fpm_status_raw)
-        fcgi_client = FCGIStatusClient( socket_path = fpm_status.get('socket'), status_path = fpm_status.get('path', '/status') )
-        fcgi_client.make_request()
-        fcgi_client.print_status()
+for configfile in discover_fpm():
+    for fpm_status in parse_fpm_config(parse_includes(configfile)):
+        if not fpm_status.get('path'):
+            continue
+        try:
+            fcgi_client = FCGIStatusClient( socket_path = fpm_status.get('socket'), status_path = fpm_status.get('path', '/status') )
+            fcgi_client.make_request()
+            fcgi_client.print_status()
 
-    except Exception as e:
-        sys.stderr.write('Exception (%s): %s\n' % (fpm_status.get('socket'), e))
+        except Exception as e:
+            sys.stderr.write('Exception (%s): %s\n' % (fpm_status.get('socket'), e))
