@@ -130,7 +130,7 @@ class FCGIStatusClient:
 
     def print_status(self):
         if hasattr(self, 'status_data'):
-            data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1])
+            data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1].decode('ascii'))
             pool_name = data.pop('pool', None)
             pm_type = data.pop('process manager', None)
             for key in data:
