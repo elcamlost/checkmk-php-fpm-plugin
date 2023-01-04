@@ -38,11 +38,30 @@
 # www dynamic total_processes 2
 
 
-def php_fpm_pools_parse(info):
+from typing import Any, Mapping
+from .agent_based_api.v1.type_defs import CheckResult, DiscoveryResult, StringTable
+
+import time
+
+from cmk.base.plugins.agent_based.agent_based_api.v1 import (
+    check_levels,
+    get_rate,
+    get_value_store,
+    GetRateError,
+    register,
+    render,
+    Service,
+)
+
+
+Section = Mapping[str, Any]
+
+
+def parse_php_fpm_pools(string_table: StringTable) -> Section:
     data = {}
-    for i, line in enumerate(info):
+    for line in string_table:
         if len(line) != 4:
-            continue # Skip unexpected lines
+            continue  # Skip unexpected lines
         pool_name, pm_type, metric, value = line
         item = '%s [%s]' % (pool_name, pm_type)
         if item not in data:
@@ -52,63 +71,81 @@ def php_fpm_pools_parse(info):
 
     return data
 
-def inventory_php_fpm_pools(parsed):
-    inv = []
-    for item in parsed.keys():
-        inv.append((item, {}))
-    return inv
 
-def check_php_fpm_pools(item, params, parsed):
+register.agent_section(
+    name='php_fpm_pools',
+    parse_function=parse_php_fpm_pools,
+)
+
+
+def discover_php_fpm_pools(section: Section) -> DiscoveryResult:
+    for item in section.keys():
+        yield Service(item=item)
+
+
+def check_php_fpm_pools(
+    item: str,
+    params: Mapping[str, Any],
+    section: Section,
+) -> CheckResult:
+    if item not in section:
+        return
+
     if params is None:
         params = {}
 
-    all_data = parsed
-    if item not in all_data:
-        return 3, 'Unable to find instance in agent output'
-    data = all_data[item]
+    data = dict(section[item])
 
     perfkeys = [
         'active_processes', 'idle_processes', 'max_active_processes',
-        'max_children_reached', 'slow_requests', 'listen_queue', 'max_listen_queue',
+        'max_children_reached', 'slow_requests', 'listen_queue',
+        'max_listen_queue',
     ]
+
     # Add some more values, derived from the raw ones...
     this_time = int(time.time())
     for key in ['accepted_conn', 'max_children_reached', 'slow_requests']:
-        per_sec = get_rate("nginx_status.%s" % key, this_time, data[key])
-        data['%s_per_sec' % key] = per_sec
-        perfkeys.append('%s_per_sec' % key)
+        try:
+            per_sec = get_rate(
+                get_value_store(),
+                "php_fpm_status.%s" % key,
+                this_time,
+                data[key],
+                raise_overflow=True
+            )
+        except GetRateError:
+            pass
+        else:
+            data['%s_per_sec' % key] = per_sec
+            perfkeys.append('%s_per_sec' % key)
 
-    perfdata = []
-    for i, key in enumerate(perfkeys):
-        perfdata.append( (key, data[key]) )
-    perfdata.sort()
+    for key in perfkeys:
+        yield from check_levels(
+            value=data[key],
+            metric_name=key,
+            levels_lower=params.get(f'lower_{key}'),
+            levels_upper=params.get(f'upper_{key}'),
+            label=key.replace('_', ' ').title(),
+            render_func=(
+                render.timespan if key == 'start_since'
+                else (lambda x: "%0.2f/s" % x) if key.endswith("_per_sec")
+                else (lambda x: "%d" % x)
+            ),
+            notice_only=key not in (
+                'active_processes',
+                'idle_processes',
+                'listen_queue',
+                'start_since',
+                'accepted_conn_per_sec',
+            ),
+        )
 
-    worst_state = 0
 
-    proc_warn, proc_crit = params.get('active_processes', (None, None))
-    proc_txt = ''
-    if proc_crit is not None and data['active_processes'] > proc_crit:
-        worst_state = max(worst_state, 2)
-        proc_txt = ' (!!)'
-    elif proc_warn is not None and data['active_processes'] > proc_warn:
-        worst_state = max(worst_state, 1)
-        proc_txt = ' (!)'
-
-    output = [
-        'Active: %d%s (%d idle, %d waiting)' % (
-            data['active_processes'], proc_txt, data['idle_processes'], data['listen_queue'],
-        ),
-        'Started %s ago' % (get_age_human_readable(data['start_since'])),
-        'Requests: %0.2f/s' % (data['accepted_conn_per_sec']),
-    ]
-
-    yield worst_state, ', '.join(output), perfdata
-
-check_info['php_fpm_pools'] = {
-    "parse_function":       php_fpm_pools_parse,
-    "check_function" :      check_php_fpm_pools,
-    "inventory_function" :  inventory_php_fpm_pools,
-    "service_description" : "PHP-FPM Pool %s Status",
-    "has_perfdata" :        True,
-    "group" :               "php_fpm_pools"
-}
+register.check_plugin(
+    name='php_fpm_pools',
+    service_name='PHP-FPM Pool %s Status',
+    discovery_function=discover_php_fpm_pools,
+    check_function=check_php_fpm_pools,
+    check_ruleset_name='php_fpm_pools',
+    check_default_parameters={},
+)
