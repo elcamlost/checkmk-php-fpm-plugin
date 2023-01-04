@@ -156,7 +156,7 @@ def parse_fpm_config(f):
     """
     Parse php-fpm config, yielding dicts with status socket info
     """
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(strict=False)
     config.read_file(f)
 
     for name in config.sections():
