@@ -164,10 +164,10 @@ def parse_fpm_config(f):
         if 'listen' not in section:
             continue
 
-        listen = section['listen']
+        listen = section['listen'].strip("'\"")
         if listen and not listen.startswith('/'):
             if 'prefix' in section:
-                listen = os.path.join(section['prefix'], listen)
+                listen = os.path.join(section['prefix'].strip("'\""), listen)
             else:
                 # we cannot infer the relative listen anchor
                 continue
@@ -177,7 +177,11 @@ def parse_fpm_config(f):
 
         yield {
             "socket": listen,
-            "path": section.get('pm.status_path'),
+            "path": (
+                section['pm.status_path'].strip("'\"")
+                if 'pm.status_path' in section
+                else None
+            ),
         }
 
 
