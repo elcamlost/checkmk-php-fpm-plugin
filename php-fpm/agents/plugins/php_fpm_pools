@@ -158,16 +158,17 @@ def parse_fpm_config(f):
     """
     config = configparser.ConfigParser(strict=False)
     config.read_file(f)
+    strip_from_listen = "'\""
 
     for name in config.sections():
         section = config[name]
         if 'listen' not in section:
             continue
 
-        listen = section['listen'].strip("'\"")
+        listen = section['listen'].strip(strip_from_listen)
         if listen and not listen.startswith('/'):
             if 'prefix' in section:
-                listen = os.path.join(section['prefix'].strip("'\""), listen)
+                listen = os.path.join(section['prefix'].strip(strip_from_listen), listen)
             else:
                 # we cannot infer the relative listen anchor
                 continue
@@ -178,7 +179,7 @@ def parse_fpm_config(f):
         yield {
             "socket": listen,
             "path": (
-                section['pm.status_path'].strip("'\"")
+                section['pm.status_path'].strip(strip_from_listen)
                 if 'pm.status_path' in section
                 else None
             ),

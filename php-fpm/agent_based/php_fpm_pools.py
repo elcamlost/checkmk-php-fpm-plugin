@@ -96,11 +96,12 @@ def check_php_fpm_pools(
 
     data = dict(section[item])
 
-    perfkeys = [
-        'active_processes', 'idle_processes', 'max_active_processes',
-        'max_children_reached', 'slow_requests', 'listen_queue',
-        'max_listen_queue',
+    lower_perfkeys = ['idle_processes']
+    upper_perfkeys = [
+        'active_processes', 'max_active_processes', 'max_children_reached',
+        'slow_requests', 'listen_queue', 'max_listen_queue',
     ]
+    perfkeys = lower_perfkeys + upper_perfkeys
 
     # Add some more values, derived from the raw ones...
     this_time = int(time.time())
@@ -120,11 +121,17 @@ def check_php_fpm_pools(
             perfkeys.append('%s_per_sec' % key)
 
     for key in perfkeys:
+        if key in lower_perfkeys:
+            levels_lower = params.get(key)
+            levels_upper = None
+        else:
+            levels_lower = None
+            levels_upper = params.get(key)
         yield from check_levels(
             value=data[key],
             metric_name=key,
-            levels_lower=params.get(f'lower_{key}'),
-            levels_upper=params.get(f'upper_{key}'),
+            levels_lower=levels_lower,
+            levels_upper=levels_upper,
             label=key.replace('_', ' ').title(),
             render_func=(
                 render.timespan if key == 'start_since'

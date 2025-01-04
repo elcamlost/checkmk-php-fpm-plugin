@@ -41,20 +41,20 @@ def _float_levels(unit):
 
 def _parameter_valuespec_php_fpm_pools():
     return Dictionary(elements=[
-        ("upper_requests_per_sec",
+        ("requests_per_sec",
          Tuple(
              title=_("Request per Second"),
              help=_("Upper levels for the current number of requests handled "
                     "by the fpm pool per second."),
              elements=_integer_levels("requests/second"),
          )),
-        ("lower_idle_processes",
+        ("idle_processes",
          Tuple(
              title=_("Idle Processes"),
              help=_("Lower levels for the number of idle processes"),
              elements=_integer_levels("processes"),
          )),
-        ("upper_max_children_reached",
+        ("max_children_reached",
          Tuple(
              title=_("Max children reached"),
              help=_("Upper levels for the number of times the maximum number "
@@ -62,7 +62,7 @@ def _parameter_valuespec_php_fpm_pools():
                     "php-fpm</b>."),
              elements=_integer_levels("times"),
          )),
-        ("upper_max_children_reached_per_sec",
+        ("max_children_reached_per_sec",
          Tuple(
              title=_("Max children reached per second"),
              help=_("Upper levels for the number of times the maximum number "
@@ -70,21 +70,21 @@ def _parameter_valuespec_php_fpm_pools():
                     "check"),
              elements=_float_levels("times/second"),
          )),
-        ("upper_slow_requests",
+        ("slow_requests",
          Tuple(
              title=_("Slow Requests"),
              help=_("Upper levels for the number of slow requests <b>since the "
                     "start of php-fpm</b>"),
              elements=_integer_levels("requests"),
          )),
-        ("upper_slow_requests_per_sec",
+        ("slow_requests_per_sec",
          Tuple(
              title=_("Slow Requests per second"),
              help=_("Upper levels for the number of slow requests <b>per "
                     "second</b> since the last check"),
              elements=_integer_levels("requests/second"),
          )),
-        ("upper_listen_queue",
+        ("listen_queue",
          Tuple(
              title=_("Listen Queue"),
              help=_("Upper levels for the number of pending requests on the "
@@ -92,7 +92,7 @@ def _parameter_valuespec_php_fpm_pools():
                     "<code>pm.backlog</code> option"),
              elements=_integer_levels("requests"),
          )),
-        ("upper_max_listen_queue",
+        ("max_listen_queue",
          Tuple(
              title=_("Max Listen Queue"),
              help=_("Upper levels for the maximum number of pending requests "
