@@ -1,6 +1,6 @@
 PKG = php_fpm
 CONTAINER = checkmk-${PKG}
-IMAGE = checkmk/check-mk-raw:2.0.0p39
+IMAGE = checkmk/check-mk-raw:2.2.0p37
 DIRS = agents checkman web
 MKP = $(shell docker exec -u cmk checkmk-php_fpm bash -c "ls -1 ~/*mkp")
 
