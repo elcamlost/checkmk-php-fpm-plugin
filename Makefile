@@ -2,7 +2,7 @@ PKG = php_fpm
 CONTAINER = checkmk-${PKG}
 IMAGE = checkmk/check-mk-raw:2.2.0p37
 DIRS = agents checkman web
-MKP = $(shell docker exec -u cmk checkmk-php_fpm bash -c "ls -1 ~/*mkp")
+MKP = $(shell docker exec -u cmk checkmk-php_fpm bash -c "ls -1 /omd/sites/cmk/local/share/check_mk/enabled_packages/*mkp")
 
 .DEFAULT: php_fpm
 .PHONY: _docker_run _docker_stop _copy_files _pack _copy_mkp php_fpm
@@ -22,7 +22,7 @@ _copy_info:
 	docker cp ${PWD}/php-fpm/info ${CONTAINER}:/omd/sites/cmk/var/check_mk/packages/${PKG}
 
 _pack:
-	docker exec -u cmk ${CONTAINER} bash -l -c "cd ~ && mkp pack ${PKG}"
+	docker exec -u cmk ${CONTAINER} bash -l -c "mkp package /omd/sites/cmk/var/check_mk/packages/${PKG}"
 
 _copy_mkp:
 	docker cp ${CONTAINER}:${MKP} ./
