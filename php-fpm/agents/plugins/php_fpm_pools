@@ -156,6 +156,9 @@ def parse_fpm_config(f):
     """
     Parse php-fpm config, yielding dicts with status socket info
     """
+    # php-fpm config allows quoted strings, but ConfigParser does not strip the quotes
+    QUOTES = "'\""
+
     config = configparser.ConfigParser(strict=False)
     config.read_file(f)
 
@@ -164,10 +167,10 @@ def parse_fpm_config(f):
         if 'listen' not in section:
             continue
 
-        listen = section['listen'].strip("'\"")
+        listen = section['listen'].strip(QUOTES)
         if listen and not listen.startswith('/'):
             if 'prefix' in section:
-                listen = os.path.join(section['prefix'].strip("'\""), listen)
+                listen = os.path.join(section['prefix'].strip(QUOTES), listen)
             else:
                 # we cannot infer the relative listen anchor
                 continue
@@ -178,7 +181,7 @@ def parse_fpm_config(f):
         yield {
             "socket": listen,
             "path": (
-                section['pm.status_path'].strip("'\"")
+                section['pm.status_path'].strip(QUOTES)
                 if 'pm.status_path' in section
                 else None
             ),
