@@ -1,3 +1,7 @@
+2.0 2025-05-15
+  - migrate to plugin 2.0 api (Thx @moschlar)
+  - add levels (Thx @moschlar)
+
 1.0 2022-03-04
   - add autodiscovery
   - fix cmk2 compatibility

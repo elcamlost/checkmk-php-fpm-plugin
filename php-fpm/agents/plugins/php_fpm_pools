@@ -130,7 +130,7 @@ class FCGIStatusClient:
 
     def print_status(self):
         if hasattr(self, 'status_data'):
-            data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1])
+            data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1].decode('ascii'))
             pool_name = data.pop('pool', None)
             pm_type = data.pop('process manager', None)
             for key in data:
@@ -156,18 +156,19 @@ def parse_fpm_config(f):
     """
     Parse php-fpm config, yielding dicts with status socket info
     """
-    config = configparser.ConfigParser()
+    config = configparser.ConfigParser(strict=False)
     config.read_file(f)
+    strip_from_listen = "'\""
 
     for name in config.sections():
         section = config[name]
         if 'listen' not in section:
             continue
 
-        listen = section['listen']
+        listen = section['listen'].strip(strip_from_listen)
         if listen and not listen.startswith('/'):
             if 'prefix' in section:
-                listen = os.path.join(section['prefix'], listen)
+                listen = os.path.join(section['prefix'].strip(strip_from_listen), listen)
             else:
                 # we cannot infer the relative listen anchor
                 continue
@@ -177,7 +178,11 @@ def parse_fpm_config(f):
 
         yield {
             "socket": listen,
-            "path": section.get('pm.status_path'),
+            "path": (
+                section['pm.status_path'].strip(strip_from_listen)
+                if 'pm.status_path' in section
+                else None
+            ),
         }
 
 

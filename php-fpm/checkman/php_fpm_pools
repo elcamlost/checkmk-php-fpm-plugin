@@ -12,6 +12,7 @@ description:
  Please note that the information provided only affect the configured pools within the server.
 
  By default the check is always OK and outputs performance indicators including graphs.
+ However, levels can be configured via ruleset for many of these indicators.
 
  First you need to set up 'pm.status_path' in pool settings to make it accessible, at least from localhost.
  We recommend to do it like follows.
