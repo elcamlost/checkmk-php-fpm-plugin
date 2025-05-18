@@ -38,24 +38,25 @@
 # www dynamic total_processes 2
 
 
-from typing import Any, Mapping
-from .agent_based_api.v1.type_defs import CheckResult, DiscoveryResult, StringTable
+from typing import Mapping, Any
 
 import time
 
-from cmk.base.plugins.agent_based.agent_based_api.v1 import (
+from cmk.agent_based.v2 import (
+    AgentSection,
     check_levels,
+    CheckPlugin,
+    CheckResult,
+    DiscoveryResult,
     get_rate,
     get_value_store,
     GetRateError,
-    register,
     render,
     Service,
+    StringTable,
 )
 
-
 Section = Mapping[str, Any]
-
 
 def parse_php_fpm_pools(string_table: StringTable) -> Section:
     data = {}
@@ -71,15 +72,14 @@ def parse_php_fpm_pools(string_table: StringTable) -> Section:
 
     return data
 
-
-register.agent_section(
+agent_section_php_fpm = AgentSection(
     name='php_fpm_pools',
     parse_function=parse_php_fpm_pools,
 )
 
 
 def discover_php_fpm_pools(section: Section) -> DiscoveryResult:
-    for item in section.keys():
+    for item in section:
         yield Service(item=item)
 
 
@@ -96,16 +96,16 @@ def check_php_fpm_pools(
 
     data = dict(section[item])
 
-    lower_perfkeys = ['idle_processes']
+    lower_perfkeys = ["idle_processes"]
     upper_perfkeys = [
-        'active_processes', 'max_active_processes', 'max_children_reached',
-        'slow_requests', 'listen_queue', 'max_listen_queue',
+        "active_processes", "max_active_processes", "max_children_reached",
+        "slow_requests", "listen_queue", "max_listen_queue",
     ]
     perfkeys = lower_perfkeys + upper_perfkeys
 
     # Add some more values, derived from the raw ones...
     this_time = int(time.time())
-    for key in ['accepted_conn', 'max_children_reached', 'slow_requests']:
+    for key in ["accepted_conn", "max_children_reached", "slow_requests"]:
         try:
             per_sec = get_rate(
                 get_value_store(),
@@ -117,8 +117,8 @@ def check_php_fpm_pools(
         except GetRateError:
             pass
         else:
-            data['%s_per_sec' % key] = per_sec
-            perfkeys.append('%s_per_sec' % key)
+            data["%s_per_sec" % key] = per_sec
+            perfkeys.append("%s_per_sec" % key)
 
     for key in perfkeys:
         if key in lower_perfkeys:
@@ -134,25 +134,26 @@ def check_php_fpm_pools(
             levels_upper=levels_upper,
             label=key.replace('_', ' ').title(),
             render_func=(
-                render.timespan if key == 'start_since'
+                render.timespan if key == "start_since"
                 else (lambda x: "%0.2f/s" % x) if key.endswith("_per_sec")
                 else (lambda x: "%d" % x)
             ),
             notice_only=key not in (
-                'active_processes',
-                'idle_processes',
-                'listen_queue',
-                'start_since',
-                'accepted_conn_per_sec',
+                "active_processes",
+                "idle_processes",
+                "listen_queue",
+                "start_since",
+                "accepted_conn_per_sec",
             ),
         )
 
 
-register.check_plugin(
-    name='php_fpm_pools',
-    service_name='PHP-FPM Pool %s Status',
+check_plugin_php_fpm = CheckPlugin(
+    name="php_fpm",
+    service_name="PHP-FPM Pool %s Status",
+    sections=["php_fpm_pools"],
     discovery_function=discover_php_fpm_pools,
     check_function=check_php_fpm_pools,
-    check_ruleset_name='php_fpm_pools',
+    check_ruleset_name="php_fpm_pools",
     check_default_parameters={},
 )
