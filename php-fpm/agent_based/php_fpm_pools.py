@@ -38,21 +38,23 @@
 # www dynamic total_processes 2
 
 
-from typing import Any, Mapping
-from .agent_based_api.v1.type_defs import CheckResult, DiscoveryResult, StringTable
+from typing import Mapping, Any
 
 import time
 
-from cmk.base.plugins.agent_based.agent_based_api.v1 import (
+from cmk.agent_based.v2 import (
+    AgentSection,
     check_levels,
+    CheckPlugin,
+    CheckResult,
+    DiscoveryResult,
     get_rate,
     get_value_store,
     GetRateError,
-    register,
     render,
     Service,
+    StringTable,
 )
-
 
 Section = Mapping[str, Any]
 
@@ -72,14 +74,14 @@ def parse_php_fpm_pools(string_table: StringTable) -> Section:
     return data
 
 
-register.agent_section(
+agent_section_php_fpm = AgentSection(
     name="php_fpm_pools",
     parse_function=parse_php_fpm_pools,
 )
 
 
 def discover_php_fpm_pools(section: Section) -> DiscoveryResult:
-    for item in section.keys():
+    for item in section:
         yield Service(item=item)
 
 
@@ -155,9 +157,10 @@ def check_php_fpm_pools(
         )
 
 
-register.check_plugin(
-    name="php_fpm_pools",
+check_plugin_php_fpm = CheckPlugin(
+    name="php_fpm",
     service_name="PHP-FPM Pool %s Status",
+    sections=["php_fpm_pools"],
     discovery_function=discover_php_fpm_pools,
     check_function=check_php_fpm_pools,
     check_ruleset_name="php_fpm_pools",
