@@ -1,6 +1,6 @@
 # PHP-FPM checkmk plugin
 
-You can download php-fpm pool monitoring plugin form [CheckMK Exchange](https://exchange.checkmk.com/p/php-fpm).
+You can download php-fpm pool monitoring plugin form [CheckMK Exchange](https://exchange.checkmk.com/p/php-fpm-1).
 
 # How to build mkp
 
