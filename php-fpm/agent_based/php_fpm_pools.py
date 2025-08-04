@@ -149,7 +149,7 @@ def check_php_fpm_pools(
 
 
 check_plugin_php_fpm = CheckPlugin(
-    name="php_fpm",
+    name="php_fpm_pools",
     service_name="PHP-FPM Pool %s Status",
     sections=["php_fpm_pools"],
     discovery_function=discover_php_fpm_pools,

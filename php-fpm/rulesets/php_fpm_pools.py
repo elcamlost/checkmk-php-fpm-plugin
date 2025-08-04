@@ -20,6 +20,8 @@ from cmk.rulesets.v1.form_specs import (
     String,
     SimpleLevels,
     LevelDirection,
+    DefaultValue,
+    InputHint,
 )
 
 from cmk.rulesets.v1.rule_specs import (
@@ -32,13 +34,14 @@ from cmk.rulesets.v1.rule_specs import (
 def _parameter_valuespec_php_fpm_pools():
     return Dictionary(elements={
         "requests_per_sec": DictElement(
-            parameter_form=SimpleLevels[int](
+            parameter_form=SimpleLevels[float](
             title=Title("Request per Second"),
             help_text=Help("Upper levels for the current number of requests handled "
                            "by the fpm pool per second."),
             level_direction=LevelDirection.UPPER,
             form_spec_template=Float(unit_symbol="requests/second"),
             migrate=migrate_to_float_simple_levels,
+            prefill_fixed_levels=DefaultValue((10.0, 30.0)),
         )),
         "idle_processes": DictElement(
             parameter_form=SimpleLevels[int](
@@ -47,6 +50,7 @@ def _parameter_valuespec_php_fpm_pools():
             level_direction=LevelDirection.LOWER,
             form_spec_template=Integer(unit_symbol="processes"),
             migrate=migrate_to_integer_simple_levels,
+            prefill_fixed_levels=DefaultValue((1, 0)),
         )),
         "max_children_reached": DictElement(
             parameter_form=SimpleLevels[int](
@@ -56,15 +60,17 @@ def _parameter_valuespec_php_fpm_pools():
             level_direction=LevelDirection.UPPER,
             form_spec_template=Integer(unit_symbol="times"),
             migrate=migrate_to_integer_simple_levels,
+            prefill_fixed_levels=DefaultValue((1, 3)),
         )),
         "max_children_reached_per_sec": DictElement(
-            parameter_form=SimpleLevels[int](
+            parameter_form=SimpleLevels[float](
             title=Title("Max children reached per second"),
             help_text=Help("Upper levels for the number of times the maximum number "
                            "of children has been reached per second since the last check"),
             level_direction=LevelDirection.UPPER,
             form_spec_template=Float(unit_symbol="times/second"),
             migrate=migrate_to_float_simple_levels,
+            prefill_fixed_levels=DefaultValue((1.0, 3.0)),
         )),
         "slow_requests": DictElement(
             parameter_form=SimpleLevels[int](
@@ -74,15 +80,17 @@ def _parameter_valuespec_php_fpm_pools():
             level_direction=LevelDirection.UPPER,
             form_spec_template=Integer(unit_symbol="requests"),
             migrate=migrate_to_integer_simple_levels,
+            prefill_fixed_levels=DefaultValue((1, 3)),
         )),
         "slow_requests_per_sec": DictElement(
-            parameter_form=SimpleLevels[int](
+            parameter_form=SimpleLevels[float](
             title=Title("Slow Requests per second"),
             help_text=Help("Upper levels for the number of slow requests <b>per "
                            "second</b> since the last check"),
             level_direction=LevelDirection.UPPER,
             form_spec_template=Float(unit_symbol="requests/second"),
             migrate=migrate_to_float_simple_levels,
+            prefill_fixed_levels=DefaultValue((1.0, 3.0)),
         )),
         "listen_queue": DictElement(
             parameter_form=SimpleLevels[int](
@@ -93,6 +101,7 @@ def _parameter_valuespec_php_fpm_pools():
             level_direction=LevelDirection.UPPER,
             form_spec_template=Integer(unit_symbol="requests"),
             migrate=migrate_to_integer_simple_levels,
+            prefill_fixed_levels=DefaultValue((255, 511)),
         )),
         "max_listen_queue": DictElement(
             parameter_form=SimpleLevels[int](
@@ -102,6 +111,7 @@ def _parameter_valuespec_php_fpm_pools():
             level_direction=LevelDirection.UPPER,
             form_spec_template=Integer(unit_symbol="requests"),
             migrate=migrate_to_integer_simple_levels,
+            prefill_fixed_levels=DefaultValue((255, 511)),
         )),
     })
 
