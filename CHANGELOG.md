@@ -6,6 +6,15 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.2.0] - 2026-03-29
+
+### Added
+- Support `pm.status_listen` socket (PHP-FPM 8.1+) for status requests ([#36](https://github.com/elcamlost/checkmk-php-fpm-plugin/pull/36))
+- Disambiguate pools with duplicate names across multiple PHP-FPM instances ([#37](https://github.com/elcamlost/checkmk-php-fpm-plugin/pull/37))
+
+### Fixed
+- Config files and process paths containing non-ASCII characters no longer crash the agent plugin ([#34](https://github.com/elcamlost/checkmk-php-fpm-plugin/pull/34))
+
 ## [2.1.0] - 2026-03-29
 
 ### Changed
