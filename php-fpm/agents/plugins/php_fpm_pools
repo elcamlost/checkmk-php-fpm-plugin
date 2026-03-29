@@ -32,6 +32,7 @@
 # list to prevent executing the detection mechanism.
 
 import configparser
+import hashlib
 import json
 import os
 import re
@@ -57,7 +58,7 @@ class FCGIStatusClient:
     # FCGI header length
     FCGI_HEADER_LENGTH = 8
 
-    def __init__(self, socket_path, socket_timeout=5.0, status_path="/status"):
+    def __init__(self, socket_path, socket_timeout=5.0, status_path="/status", pool_name=None):
         # socket_path of type tuple is TCP
         if type(socket_path) is tuple:
             self.socket = socket.create_connection(socket_path, socket_timeout)
@@ -66,6 +67,7 @@ class FCGIStatusClient:
             self.socket.settimeout(socket_timeout)
             self.socket.connect(socket_path)
         self.status_path = status_path
+        self.pool_name = pool_name
         self.request_id = 1
 
         self.params = {
@@ -143,7 +145,8 @@ class FCGIStatusClient:
     def print_status(self):
         if hasattr(self, "status_data"):
             data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1].decode("ascii"))
-            pool_name = data.pop("pool", None)
+            fcgi_pool_name = data.pop("pool", None)
+            pool_name = self.pool_name or fcgi_pool_name
             pm_type = data.pop("process manager", None)
             for key in data:
                 spaceless_key = "_".join(key.split())
@@ -195,9 +198,24 @@ def parse_fpm_config(f):
             socket = socket.replace("$pool", name)
 
         yield {
+            "pool_name": name,
             "socket": socket,
             "path": (section["pm.status_path"].strip(strip_from_listen) if "pm.status_path" in section else None),
         }
+
+
+def make_qualifier(configfile, taken=None):
+    """
+    Return a human-readable qualifier for a config file path.
+    Extracts a version number (e.g. "8.1") if present and not already taken.
+    Falls back to a short SHA-256 hex digest.
+    """
+    match = re.search(r"\d+\.\d+", configfile)
+    if match:
+        version = match.group(0)
+        if taken is None or version not in taken:
+            return version
+    return hashlib.sha256(configfile.encode()).hexdigest()[:8]
 
 
 def discover_fpm():
@@ -214,17 +232,48 @@ def discover_fpm():
 
 
 sys.stdout.write("<<<php_fpm_pools>>>\n")
+
+# Pass 1: collect all pools from all running php-fpm instances
+all_pools = []  # list of (configfile, fpm_status)
 for configfile in discover_fpm():
     for fpm_status in parse_fpm_config(parse_includes(configfile)):
-        if not fpm_status.get("path"):
-            continue
-        try:
-            fcgi_client = FCGIStatusClient(
-                socket_path=fpm_status.get("socket"),
-                status_path=fpm_status.get("path", "/status"),
-            )
-            fcgi_client.make_request()
-            fcgi_client.print_status()
+        if fpm_status.get("path"):
+            all_pools.append((configfile, fpm_status))
 
-        except Exception as e:
-            sys.stderr.write("Exception (%s): %s\n" % (fpm_status.get("socket"), e))
+# Pass 2: detect duplicate pool names and assign unique qualifiers
+pool_name_counts = {}
+for _, fpm_status in all_pools:
+    name = fpm_status["pool_name"]
+    pool_name_counts[name] = pool_name_counts.get(name, 0) + 1
+duplicate_pool_names = {name for name, count in pool_name_counts.items() if count > 1}
+
+used_qualifiers = {}  # pool_name -> set of qualifiers already assigned
+qualifiers = {}  # configfile -> qualifier
+for configfile, fpm_status in all_pools:
+    if fpm_status["pool_name"] not in duplicate_pool_names:
+        continue
+    if configfile in qualifiers:
+        continue
+    taken = used_qualifiers.setdefault(fpm_status["pool_name"], set())
+    qualifier = make_qualifier(configfile, taken=taken)
+    taken.add(qualifier)
+    qualifiers[configfile] = qualifier
+
+# Pass 3: connect to each pool and output metrics
+for configfile, fpm_status in all_pools:
+    pool_name = fpm_status["pool_name"]
+    if pool_name in duplicate_pool_names:
+        display_name = "%s@%s" % (pool_name, qualifiers[configfile])
+    else:
+        display_name = pool_name
+    try:
+        fcgi_client = FCGIStatusClient(
+            socket_path=fpm_status.get("socket"),
+            status_path=fpm_status.get("path", "/status"),
+            pool_name=display_name,
+        )
+        fcgi_client.make_request()
+        fcgi_client.print_status()
+
+    except Exception as e:
+        sys.stderr.write("Exception (%s): %s\n" % (fpm_status.get("socket"), e))
