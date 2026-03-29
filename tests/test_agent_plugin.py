@@ -1,4 +1,5 @@
 import importlib.util
+import json
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
 from textwrap import dedent
@@ -69,6 +70,16 @@ class TestParseFpmConfig:
         )
         assert result[0]["socket"] == "/run/php-fpm.sock"
 
+    def test_result_includes_pool_name(self):
+        result = self._parse(
+            dedent("""\
+            [mypool]
+            listen = /run/php-fpm.sock
+            pm.status_path = /status
+            """)
+        )
+        assert result[0]["pool_name"] == "mypool"
+
     def test_status_listen_supports_pool_variable(self):
         result = self._parse(
             dedent("""\
@@ -79,6 +90,55 @@ class TestParseFpmConfig:
             """)
         )
         assert result[0]["socket"] == "/run/mypool-status.sock"
+
+
+class TestFCGIStatusClientPrintStatus:
+    def _make_client(self, pool="www", pm="dynamic"):
+        client = agent.FCGIStatusClient.__new__(agent.FCGIStatusClient)
+        client.pool_name = None
+        client.status_data = (
+            b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\n\r\n"
+            + json.dumps({"pool": pool, "process manager": pm, "active processes": 1}).encode()
+        )
+        return client
+
+    def test_output_has_four_fields(self, capsys):
+        self._make_client().print_status()
+        fields = capsys.readouterr().out.splitlines()[0].split()
+        assert len(fields) == 4
+
+    def test_pool_name_is_first_field(self, capsys):
+        self._make_client(pool="www@a1b2c3d4").print_status()
+        line = capsys.readouterr().out.splitlines()[0]
+        assert line.split()[0] == "www@a1b2c3d4"
+
+
+class TestMakeQualifier:
+    def test_extracts_version_from_debian_path(self):
+        assert agent.make_qualifier("/etc/php/8.1/fpm/php-fpm.conf") == "8.1"
+
+    def test_extracts_version_from_php84_path(self):
+        assert agent.make_qualifier("/etc/php/8.4/fpm/php-fpm.conf") == "8.4"
+
+    def test_falls_back_to_sha_when_no_version(self):
+        result = agent.make_qualifier("/etc/php-fpm.conf")
+        assert len(result) == 8
+        assert all(c in "0123456789abcdef" for c in result)
+
+    def test_sha_is_stable(self):
+        assert agent.make_qualifier("/etc/php-fpm.conf") == agent.make_qualifier("/etc/php-fpm.conf")
+
+    def test_different_paths_give_different_sha(self):
+        assert agent.make_qualifier("/etc/php-fpm-a.conf") != agent.make_qualifier("/etc/php-fpm-b.conf")
+
+    def test_collision_falls_back_to_sha(self):
+        # Two paths that would produce the same version qualifier
+        q1 = agent.make_qualifier("/etc/php/8.1/fpm/php-fpm.conf", taken={"8.1"})
+        assert len(q1) == 8  # SHA fallback
+
+    def test_no_collision_returns_version(self):
+        q1 = agent.make_qualifier("/etc/php/8.1/fpm/php-fpm.conf", taken={"8.4"})
+        assert q1 == "8.1"
 
 
 class TestDiscoverFpm:
