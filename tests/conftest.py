@@ -25,7 +25,7 @@ _mock_v2.check_levels = check_levels
 _mock_v2.get_rate = get_rate
 _mock_v2.get_value_store = get_value_store
 _mock_v2.GetRateError = GetRateError
-_mock_v2.render = SimpleNamespace(timespan=str)
+_mock_v2.render = SimpleNamespace(timespan=str, bytes=str)
 _mock_v2.Service = MagicMock(side_effect=lambda item: item)
 _mock_v2.StringTable = list
 _mock_v2.CheckResult = object

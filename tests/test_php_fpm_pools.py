@@ -155,6 +155,46 @@ class TestLevelsDirection:
 # ---------------------------------------------------------------------------
 
 
+class TestMemoryMetrics:
+    def _section_with_memory(self, total=104857600, avg=52428800):
+        return {
+            "www [dynamic]": {
+                **TYPICAL_SECTION["www [dynamic]"],
+                "memory_total_rss": total,
+                "memory_avg_rss": avg,
+            }
+        }
+
+    def test_memory_metrics_checked_when_present(self):
+        run_check(section=self._section_with_memory())
+        keys_checked = [c.kwargs["metric_name"] for c in check_levels.call_args_list]
+        assert "memory_total_rss" in keys_checked
+        assert "memory_avg_rss" in keys_checked
+
+    def test_memory_metrics_skipped_when_absent(self):
+        run_check()
+        keys_checked = [c.kwargs["metric_name"] for c in check_levels.call_args_list]
+        assert "memory_total_rss" not in keys_checked
+        assert "memory_avg_rss" not in keys_checked
+
+    def test_memory_uses_upper_levels(self):
+        params = {"memory_total_rss": ("fixed", (512 * 1024 * 1024, 1024 * 1024 * 1024))}
+        run_check(params=params, section=self._section_with_memory())
+        calls = check_levels_calls_for("memory_total_rss")
+        assert calls[0].kwargs["levels_upper"] is not None
+        assert calls[0].kwargs["levels_lower"] is None
+
+    def test_memory_total_rss_not_notice_only(self):
+        run_check(section=self._section_with_memory())
+        calls = check_levels_calls_for("memory_total_rss")
+        assert calls[0].kwargs["notice_only"] is False
+
+    def test_memory_avg_rss_not_notice_only(self):
+        run_check(section=self._section_with_memory())
+        calls = check_levels_calls_for("memory_avg_rss")
+        assert calls[0].kwargs["notice_only"] is False
+
+
 class TestNoticeOnly:
     def _notice_only_for(self, key):
         run_check()

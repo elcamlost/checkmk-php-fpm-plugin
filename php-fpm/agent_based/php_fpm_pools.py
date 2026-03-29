@@ -125,6 +125,11 @@ def check_php_fpm_pools(
             data["%s_per_sec" % key] = per_sec
             perfkeys.append("%s_per_sec" % key)
 
+    for key in ["memory_total_rss", "memory_avg_rss"]:
+        if key in data:
+            upper_perfkeys.append(key)
+            perfkeys.append(key)
+
     for key in perfkeys:
         if key in lower_perfkeys:
             levels_lower = params.get(key)
@@ -143,6 +148,8 @@ def check_php_fpm_pools(
                 if key == "start_since"
                 else (lambda x: "%0.2f/s" % x)
                 if key.endswith("_per_sec")
+                else render.bytes
+                if key.endswith("_rss")
                 else (lambda x: "%d" % x)
             ),
             notice_only=key
@@ -152,6 +159,8 @@ def check_php_fpm_pools(
                 "listen_queue",
                 "start_since",
                 "accepted_conn_per_sec",
+                "memory_total_rss",
+                "memory_avg_rss",
             ),
         )
 
