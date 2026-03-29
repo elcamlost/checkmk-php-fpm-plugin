@@ -151,6 +151,8 @@ class FCGIStatusClient:
             for key in data:
                 spaceless_key = "_".join(key.split())
                 sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, spaceless_key, str(data[key])))
+            return pm_type
+        return None
 
 
 def parse_includes(filename):
@@ -218,27 +220,65 @@ def make_qualifier(configfile, taken=None):
     return hashlib.sha256(configfile.encode()).hexdigest()[:8]
 
 
+def get_worker_rss(master_pid, pool_name, proc_root="/proc"):
+    """
+    Return list of RSS values (in bytes) for worker processes of the given master PID and pool name.
+    Workers are identified via the master's children list and their process title.
+    """
+    rss_values = []
+    total_rss, avg_rss = None, None
+    try:
+        with open("%s/%d/task/%d/children" % (proc_root, master_pid, master_pid), encoding="utf-8") as fp:
+            child_pids = [int(p) for p in fp.read().split() if p]
+    except (IOError, OSError, ValueError):
+        return total_rss, avg_rss
+
+    worker_title = "php-fpm: pool %s" % pool_name
+    for pid in child_pids:
+        try:
+            with open("%s/%d/cmdline" % (proc_root, pid), encoding="utf-8", errors="replace") as fp:
+                if fp.read().strip("\0") != worker_title:
+                    continue
+            with open("%s/%d/status" % (proc_root, pid), encoding="utf-8", errors="replace") as fp:
+                for line in fp:
+                    if line.startswith("VmRSS:"):
+                        rss_values.append(int(line.split()[1]) * 1024)
+                        break
+        except (IOError, OSError, ValueError):
+            continue
+    if len(rss_values) > 0:
+        total_rss = sum(rss_values)
+        avg_rss = total_rss // len(rss_values) if rss_values else 0
+    return total_rss, avg_rss
+
+
 def discover_fpm():
     """
-    Find running php-fpm processes, yielding their config file paths
+    Find running php-fpm processes, yielding (config file path, master PID) tuples
     """
     pattern = re.compile(r"php-fpm: master process \((.*)\)$")
     for f in glob("/proc/[0-9]*/cmdline"):
+        try:
+            pid = int(os.path.basename(os.path.dirname(f)))
+        except ValueError:
+            continue
         with open(f, encoding="utf-8", errors="replace") as fp:
             cmdline = fp.readline()
             match = pattern.match(cmdline.strip("\0"))
             if match:
-                yield match.group(1)
+                yield match.group(1), pid
 
 
 sys.stdout.write("<<<php_fpm_pools>>>\n")
 
 # Pass 1: collect all pools from all running php-fpm instances
 all_pools = []  # list of (configfile, fpm_status)
-for configfile in discover_fpm():
+master_pids = {}  # configfile -> master PID
+for configfile, master_pid in discover_fpm():
     for fpm_status in parse_fpm_config(parse_includes(configfile)):
         if fpm_status.get("path"):
             all_pools.append((configfile, fpm_status))
+            master_pids[configfile] = master_pid
 
 # Pass 2: detect duplicate pool names and assign unique qualifiers
 pool_name_counts = {}
@@ -273,7 +313,11 @@ for configfile, fpm_status in all_pools:
             pool_name=display_name,
         )
         fcgi_client.make_request()
-        fcgi_client.print_status()
+        pm_type = fcgi_client.print_status()
+        total_rss, avg_rss = get_worker_rss(master_pids[configfile], pool_name)
+        if total_rss is not None and avg_rss is not None:
+            sys.stdout.write("%s %s memory_total_rss %d\n" % (display_name, pm_type, total_rss))
+            sys.stdout.write("%s %s memory_avg_rss %d\n" % (display_name, pm_type, avg_rss))
 
     except Exception as e:
         sys.stderr.write("Exception (%s): %s\n" % (fpm_status.get("socket"), e))

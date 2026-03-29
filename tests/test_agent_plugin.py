@@ -142,11 +142,63 @@ class TestMakeQualifier:
 
 
 class TestDiscoverFpm:
+    def test_yields_configfile_and_pid(self, tmp_path):
+        proc_dir = tmp_path / "1234"
+        proc_dir.mkdir()
+        cmdline = proc_dir / "cmdline"
+        cmdline.write_bytes(b"php-fpm: master process (/etc/php-fpm.conf)\x00")
+        with patch.object(agent, "glob", return_value=[str(cmdline)]):
+            result = list(agent.discover_fpm())
+        assert len(result) == 1
+        configfile, pid = result[0]
+        assert configfile == "/etc/php-fpm.conf"
+        assert pid == 1234
+
     def test_non_ascii_cmdline_does_not_crash(self, tmp_path):
-        # Simulate a /proc/PID/cmdline with a non-UTF-8 byte in the path
-        cmdline = tmp_path / "cmdline"
+        proc_dir = tmp_path / "5678"
+        proc_dir.mkdir()
+        cmdline = proc_dir / "cmdline"
         cmdline.write_bytes(b"php-fpm: master process (/etc/ph\xe9-fpm.conf)\x00")
         with patch.object(agent, "glob", return_value=[str(cmdline)]):
             result = list(agent.discover_fpm())
-        # The match may or may not succeed depending on encoding, but must not crash
         assert isinstance(result, list)
+
+
+class TestGetWorkerRss:
+    def _make_proc(self, tmp_path, pid, cmdline, vmrss_kb):
+        proc_dir = tmp_path / str(pid)
+        proc_dir.mkdir()
+        (proc_dir / "cmdline").write_text(cmdline, encoding="utf-8")
+        (proc_dir / "status").write_text("VmRSS:\t%d kB\n" % vmrss_kb, encoding="utf-8")
+
+    def _make_master(self, tmp_path, master_pid, child_pids):
+        master_dir = tmp_path / str(master_pid) / "task" / str(master_pid)
+        master_dir.mkdir(parents=True)
+        (master_dir / "children").write_text(" ".join(str(p) for p in child_pids), encoding="utf-8")
+
+    def test_returns_rss_for_matching_workers(self, tmp_path):
+        self._make_master(tmp_path, master_pid=10, child_pids=[101, 102])
+        self._make_proc(tmp_path, 101, "php-fpm: pool www", vmrss_kb=1024)
+        self._make_proc(tmp_path, 102, "php-fpm: pool www", vmrss_kb=2048)
+        total_rss, avg_rss = agent.get_worker_rss(10, "www", proc_root=str(tmp_path))
+        assert total_rss == 3 * 1024 * 1024
+        assert avg_rss == 3 * 1024 * 512
+
+    def test_excludes_wrong_pool(self, tmp_path):
+        self._make_master(tmp_path, master_pid=10, child_pids=[101, 102])
+        self._make_proc(tmp_path, 101, "php-fpm: pool www", vmrss_kb=1024)
+        self._make_proc(tmp_path, 102, "php-fpm: pool api", vmrss_kb=2048)
+        total_rss, avg_rss = agent.get_worker_rss(10, "www", proc_root=str(tmp_path))
+        assert total_rss == 1 * 1024 * 1024
+        assert avg_rss == 1 * 1024 * 1024
+
+    def test_returns_empty_when_no_workers(self, tmp_path):
+        self._make_master(tmp_path, master_pid=10, child_pids=[])
+        total_rss, avg_rss = agent.get_worker_rss(10, "www", proc_root=str(tmp_path))
+        assert total_rss is None
+        assert avg_rss is None
+
+    def test_returns_empty_when_children_file_missing(self, tmp_path):
+        total_rss, avg_rss = agent.get_worker_rss(99999, "www", proc_root=str(tmp_path))
+        assert total_rss is None
+        assert avg_rss is None

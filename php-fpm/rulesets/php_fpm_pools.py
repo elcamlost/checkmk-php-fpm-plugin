@@ -127,6 +127,26 @@ def _parameter_valuespec_php_fpm_pools():
                     prefill_fixed_levels=DefaultValue((255, 511)),
                 )
             ),
+            "memory_total_rss": DictElement(
+                parameter_form=SimpleLevels[int](
+                    title=Title("Total Worker Memory (RSS)"),
+                    help_text=Help("Upper levels for the total RSS memory used by all worker processes in the pool."),
+                    level_direction=LevelDirection.UPPER,
+                    form_spec_template=Integer(unit_symbol="bytes"),
+                    migrate=migrate_to_integer_simple_levels,
+                    prefill_fixed_levels=DefaultValue((512 * 1024 * 1024, 1024 * 1024 * 1024)),
+                )
+            ),
+            "memory_avg_rss": DictElement(
+                parameter_form=SimpleLevels[int](
+                    title=Title("Average Worker Memory (RSS)"),
+                    help_text=Help("Upper levels for the average RSS memory per worker process in the pool."),
+                    level_direction=LevelDirection.UPPER,
+                    form_spec_template=Integer(unit_symbol="bytes"),
+                    migrate=migrate_to_integer_simple_levels,
+                    prefill_fixed_levels=DefaultValue((128 * 1024 * 1024, 256 * 1024 * 1024)),
+                )
+            ),
         }
     )
 

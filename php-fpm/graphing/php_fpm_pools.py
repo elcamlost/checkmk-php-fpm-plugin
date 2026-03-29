@@ -2,6 +2,7 @@ from cmk.graphing.v1 import Title, graphs, metrics
 
 PHP_FPM_UNIT_NUMBER = metrics.Unit(metrics.DecimalNotation(""))
 PHP_FPM_UNIT_PER_SECOND = metrics.Unit(metrics.DecimalNotation("/s"))
+PHP_FPM_UNIT_BYTES = metrics.Unit(metrics.IECNotation("B"))
 
 metric_php_fpm_accepted_conn_per_sec = metrics.Metric(
     name="accepted_conn_per_sec",
@@ -108,4 +109,25 @@ graph_php_fpm_processes = graphs.Graph(
     title=Title("Processes"),
     simple_lines=["max_active_processes"],
     compound_lines=["active_processes", "idle_processes"],
+)
+
+metric_php_fpm_memory_total_rss = metrics.Metric(
+    name="memory_total_rss",
+    title=Title("Total RSS memory of all workers"),
+    unit=PHP_FPM_UNIT_BYTES,
+    color=metrics.Color.GREEN,
+)
+
+metric_php_fpm_memory_avg_rss = metrics.Metric(
+    name="memory_avg_rss",
+    title=Title("Average RSS memory per worker"),
+    unit=PHP_FPM_UNIT_BYTES,
+    color=metrics.Color.LIGHT_GREEN,
+)
+
+graph_php_fpm_memory = graphs.Graph(
+    name="memory",
+    title=Title("Worker memory"),
+    compound_lines=["memory_total_rss"],
+    simple_lines=["memory_avg_rss"],
 )
