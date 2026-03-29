@@ -8,19 +8,17 @@ from cmk.rulesets.v1 import (
     Help,
     Title,
 )
-
 from cmk.rulesets.v1.form_specs import (
     DictElement,
     Dictionary,
-    Integer,
-    migrate_to_integer_simple_levels,
     Float,
-    migrate_to_float_simple_levels,
-    String,
-    SimpleLevels,
+    Integer,
     LevelDirection,
+    SimpleLevels,
+    String,
+    migrate_to_float_simple_levels,
+    migrate_to_integer_simple_levels,
 )
-
 from cmk.rulesets.v1.rule_specs import (
     CheckParameters,
     HostAndItemCondition,
@@ -35,8 +33,7 @@ def _parameter_valuespec_php_fpm_pools():
                 parameter_form=SimpleLevels[int](
                     title=Title("Request per Second"),
                     help_text=Help(
-                        "Upper levels for the current number of requests handled "
-                        "by the fpm pool per second."
+                        "Upper levels for the current number of requests handled by the fpm pool per second."
                     ),
                     level_direction=LevelDirection.UPPER,
                     form_spec_template=Float(unit_symbol="requests/second"),
@@ -79,10 +76,7 @@ def _parameter_valuespec_php_fpm_pools():
             "slow_requests": DictElement(
                 parameter_form=SimpleLevels[int](
                     title=Title("Slow Requests"),
-                    help_text=Help(
-                        "Upper levels for the number of slow requests <b>since the "
-                        "start of php-fpm</b>"
-                    ),
+                    help_text=Help("Upper levels for the number of slow requests <b>since the start of php-fpm</b>"),
                     level_direction=LevelDirection.UPPER,
                     form_spec_template=Integer(unit_symbol="requests"),
                     migrate=migrate_to_integer_simple_levels,
@@ -92,8 +86,7 @@ def _parameter_valuespec_php_fpm_pools():
                 parameter_form=SimpleLevels[int](
                     title=Title("Slow Requests per second"),
                     help_text=Help(
-                        "Upper levels for the number of slow requests <b>per "
-                        "second</b> since the last check"
+                        "Upper levels for the number of slow requests <b>per second</b> since the last check"
                     ),
                     level_direction=LevelDirection.UPPER,
                     form_spec_template=Float(unit_symbol="requests/second"),

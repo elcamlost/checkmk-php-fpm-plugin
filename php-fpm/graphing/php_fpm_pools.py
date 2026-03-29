@@ -35,9 +35,7 @@ metric_php_fpm_listen_queue = metrics.Metric(
 
 metric_php_fpm_max_listen_queue = metrics.Metric(
     name="max_listen_queue",
-    title=Title(
-        "the maximum number of requests in the queue of pending connections since FPM has started"
-    ),
+    title=Title("the maximum number of requests in the queue of pending connections since FPM has started"),
     unit=PHP_FPM_UNIT_NUMBER,
     color=metrics.Color.GRAY,
 )

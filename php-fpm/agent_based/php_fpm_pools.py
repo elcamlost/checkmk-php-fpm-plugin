@@ -38,22 +38,21 @@
 # www dynamic total_processes 2
 
 
-from typing import Mapping, Any
-
 import time
+from typing import Any, Mapping
 
 from cmk.agent_based.v2 import (
     AgentSection,
-    check_levels,
     CheckPlugin,
     CheckResult,
     DiscoveryResult,
-    get_rate,
-    get_value_store,
     GetRateError,
-    render,
     Service,
     StringTable,
+    check_levels,
+    get_rate,
+    get_value_store,
+    render,
 )
 
 Section = Mapping[str, Any]
