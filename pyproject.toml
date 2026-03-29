@@ -17,6 +17,9 @@ dev = [
 [tool.setuptools]
 packages = []
 
+[tool.coverage.run]
+omit = ["tests/test_package.py", "tests/test_agent_plugin.py"]
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "--cov=php_fpm_pools --cov-report=term-missing --cov-report=xml"
