@@ -154,7 +154,7 @@ def parse_includes(filename):
     """
     Yield lines in filename, recursively parsing include= lines
     """
-    with open(filename) as f:
+    with open(filename, encoding="utf-8", errors="replace") as f:
         for line in f:
             if line.strip().startswith("include"):
                 include = line.split("=", 1)[1].strip()
@@ -200,7 +200,7 @@ def discover_fpm():
     """
     pattern = re.compile(r"php-fpm: master process \((.*)\)$")
     for f in glob("/proc/[0-9]*/cmdline"):
-        with open(f) as fp:
+        with open(f, encoding="utf-8", errors="replace") as fp:
             cmdline = fp.readline()
             match = pattern.match(cmdline.strip("\0"))
             if match:
