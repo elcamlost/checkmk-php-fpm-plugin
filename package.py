@@ -17,7 +17,7 @@ DESCRIPTION = (
     "See changes here https://raw.githubusercontent.com/elcamlost/checkmk-php-fpm-plugin/master/php-fpm/Changes"
 )
 DOWNLOAD_URL = "https://github.com/elcamlost/checkmk-php-fpm-plugin"
-PLUGIN_VERSION = "2.2.0"
+PLUGIN_VERSION = "2.3.0"
 CHECKMK_MIN_VERSION = "2.3.0p1"
 
 
