@@ -1,4 +1,6 @@
 *.mkp
+coverage.xml
+.coverage
 *.egg-info
 .ruff_cache/
 .venv/

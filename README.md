@@ -1,5 +1,7 @@
 # PHP-FPM checkmk plugin
 
+[![codecov](https://codecov.io/gh/elcamlost/checkmk-php-fpm-plugin/branch/main/graph/badge.svg)](https://codecov.io/gh/elcamlost/checkmk-php-fpm-plugin)
+
 You can download php-fpm pool monitoring plugin form [CheckMK Exchange](https://exchange.checkmk.com/p/php-fpm-1).
 
 # Upgrading from 2.3 to 2.4

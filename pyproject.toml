@@ -4,12 +4,13 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "checkmk-php-fpm-plugin"
-version = "2.0.0"
+version = "2.1.0"
 requires-python = ">=3.14"
 
 [project.optional-dependencies]
 dev = [
     "pytest",
+    "pytest-cov",
     "ruff",
 ]
 
@@ -18,6 +19,7 @@ packages = []
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+addopts = "--cov=php_fpm_pools --cov-report=term-missing --cov-report=xml"
 
 [tool.ruff]
 target-version = "py314"
