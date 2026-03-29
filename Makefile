@@ -7,7 +7,7 @@ MKP = $(shell ls ${PKG}*.mkp 2>/dev/null | head -1)
 .PHONY: package test _docker_run _docker_stop _install _verify
 
 package:
-	bash package.sh
+	python3 package.py
 
 test: package
 	docker run --detach --rm --name=${CONTAINER} ${IMAGE}
