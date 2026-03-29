@@ -28,8 +28,8 @@ jobs:
       - name: Build MKP
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          sed -i "s/^PLUGIN_VERSION=.*/PLUGIN_VERSION=\"$VERSION\"/" package.sh
-          bash package.sh
+          sed -i "s/^PLUGIN_VERSION = .*/PLUGIN_VERSION = \"$VERSION\"/" package.py
+          python3 package.py
 
       - name: Extract release notes
         run: |
