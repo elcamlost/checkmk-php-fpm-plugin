@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.0] - 2026-03-29
+
+### Added
+- New metrics `memory_total_rss` and `memory_avg_rss` added. ([#40](https://github.com/elcamlost/checkmk-php-fpm-plugin/pull/40))
+
 ## [2.2.0] - 2026-03-29
 
 ### Added
