@@ -185,11 +185,17 @@ def parse_fpm_config(f):
                 # we cannot infer the relative listen anchor
                 continue
 
-        if listen:
-            listen = listen.replace("$pool", name)
+        status_listen = section.get("pm.status_listen", "").strip(strip_from_listen)
+        if status_listen:
+            socket = status_listen
+        else:
+            socket = listen
+
+        if socket:
+            socket = socket.replace("$pool", name)
 
         yield {
-            "socket": listen,
+            "socket": socket,
             "path": (section["pm.status_path"].strip(strip_from_listen) if "pm.status_path" in section else None),
         }
 

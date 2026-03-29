@@ -1,6 +1,7 @@
 import importlib.util
 from importlib.machinery import SourceFileLoader
 from pathlib import Path
+from textwrap import dedent
 from unittest.mock import patch
 
 _agent_path = str(Path(__file__).parent.parent / "php-fpm" / "agents" / "plugins" / "php_fpm_pools")
@@ -30,6 +31,54 @@ class TestParseIncludes:
         cfg.write_bytes(b"[www]\n; caf\xe9\nlisten = /run/php-fpm.sock\n")
         lines = list(agent.parse_includes(str(cfg)))
         assert any("listen" in line for line in lines)
+
+
+class TestParseFpmConfig:
+    def _parse(self, ini_text):
+        return list(agent.parse_fpm_config(iter(ini_text.splitlines(keepends=True))))
+
+    def test_uses_listen_as_socket(self):
+        result = self._parse(
+            dedent("""\
+            [www]
+            listen = /run/php-fpm.sock
+            pm.status_path = /status
+            """)
+        )
+        assert result[0]["socket"] == "/run/php-fpm.sock"
+
+    def test_uses_status_listen_when_set(self):
+        result = self._parse(
+            dedent("""\
+            [www]
+            listen = /run/php-fpm.sock
+            pm.status_listen = /run/php-fpm-status.sock
+            pm.status_path = /status
+            """)
+        )
+        assert result[0]["socket"] == "/run/php-fpm-status.sock"
+
+    def test_falls_back_to_listen_when_status_listen_empty(self):
+        result = self._parse(
+            dedent("""\
+            [www]
+            listen = /run/php-fpm.sock
+            pm.status_listen =
+            pm.status_path = /status
+            """)
+        )
+        assert result[0]["socket"] == "/run/php-fpm.sock"
+
+    def test_status_listen_supports_pool_variable(self):
+        result = self._parse(
+            dedent("""\
+            [mypool]
+            listen = /run/php-fpm.sock
+            pm.status_listen = /run/$pool-status.sock
+            pm.status_path = /status
+            """)
+        )
+        assert result[0]["socket"] == "/run/mypool-status.sock"
 
 
 class TestDiscoverFpm:
