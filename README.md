@@ -11,7 +11,7 @@ Version 2.1.0 requires Checkmk 2.3.0 or later and renames the internal check plu
 # How to build mkp
 
 ```bash
-bash package.sh
+python3 package.py
 ```
 
 This produces `php_fpm.mkp` in the repository root.

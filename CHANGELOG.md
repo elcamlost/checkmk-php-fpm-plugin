@@ -10,7 +10,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - Migrate to new plugin API (`cmk.agent_based.v2`, `cmk.rulesets.v1`, `cmk.graphing.v1`) — compatible with Checkmk 2.3+
-- Replace Docker-based packaging with `package.sh` script
+- Replace Docker-based packaging with `package.py` script
 
 ### Added
 - Graphing definitions for all metrics
