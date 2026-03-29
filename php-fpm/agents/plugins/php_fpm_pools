@@ -33,12 +33,11 @@
 
 import configparser
 import json
+import os
 import re
 import socket
 import struct
 import sys
-import os
-
 from glob import iglob as glob
 
 
@@ -109,15 +108,8 @@ class FCGIStatusClient:
             parameters_length,
             parameters_padding_req,
         )
-        fcgi_header_end = struct.pack(
-            "!BBHHBx", self.FCGI_VERSION, self.FCGI_PARAMS, self.request_id, 0, 0
-        )
-        self.fcgi_params = (
-            fcgi_header_start
-            + parameters.encode()
-            + parameters_padding
-            + fcgi_header_end
-        )
+        fcgi_header_end = struct.pack("!BBHHBx", self.FCGI_VERSION, self.FCGI_PARAMS, self.request_id, 0, 0)
+        self.fcgi_params = fcgi_header_start + parameters.encode() + parameters_padding + fcgi_header_end
 
     def execute(self):
         self.status_data = b""
@@ -126,25 +118,19 @@ class FCGIStatusClient:
 
         while True:
             header = self.socket.recv(self.FCGI_HEADER_LENGTH)
-            fcgi_version, request_type, request_id, request_length, request_padding = (
-                struct.unpack("!BBHHBx", header)
-            )
+            fcgi_version, request_type, request_id, request_length, request_padding = struct.unpack("!BBHHBx", header)
 
             if request_type == 3:
                 break
             elif request_type in (6, 7):
                 raw_status_data = b""
                 while len(raw_status_data) < request_length:
-                    raw_status_data += self.socket.recv(
-                        request_length - len(raw_status_data)
-                    )
+                    raw_status_data += self.socket.recv(request_length - len(raw_status_data))
                 self.socket.recv(request_padding)
                 self.status_data += raw_status_data
 
             if request_type == 7:
-                raise Exception(
-                    "Received an error packet: " + self.status_data.decode("ascii")
-                )
+                raise Exception("Received an error packet: " + self.status_data.decode("ascii"))
             elif request_type not in (3, 6):
                 raise Exception("Received unexpected packet type: " + str(request_type))
 
@@ -161,10 +147,7 @@ class FCGIStatusClient:
             pm_type = data.pop("process manager", None)
             for key in data:
                 spaceless_key = "_".join(key.split())
-                sys.stdout.write(
-                    "%s %s %s %s\n"
-                    % (pool_name, pm_type, spaceless_key, str(data[key]))
-                )
+                sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, spaceless_key, str(data[key])))
 
 
 def parse_includes(filename):
@@ -197,9 +180,7 @@ def parse_fpm_config(f):
         listen = section["listen"].strip(strip_from_listen)
         if listen and not listen.startswith("/"):
             if "prefix" in section:
-                listen = os.path.join(
-                    section["prefix"].strip(strip_from_listen), listen
-                )
+                listen = os.path.join(section["prefix"].strip(strip_from_listen), listen)
             else:
                 # we cannot infer the relative listen anchor
                 continue
@@ -209,11 +190,7 @@ def parse_fpm_config(f):
 
         yield {
             "socket": listen,
-            "path": (
-                section["pm.status_path"].strip(strip_from_listen)
-                if "pm.status_path" in section
-                else None
-            ),
+            "path": (section["pm.status_path"].strip(strip_from_listen) if "pm.status_path" in section else None),
         }
 
 
