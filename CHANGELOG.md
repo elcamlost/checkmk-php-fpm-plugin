@@ -10,7 +10,6 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Changed
 - Migrate to new plugin API (`cmk.agent_based.v2`, `cmk.rulesets.v1`, `cmk.graphing.v1`) — compatible with Checkmk 2.3+
-- Rename check plugin from `php_fpm_pools` to `php_fpm` (service description unchanged — historical data preserved on re-discovery)
 - Replace Docker-based packaging with `package.sh` script
 
 ### Added
