@@ -1,8 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": ["config:recommended", "helpers:pinGitHubActionDigests"],
+  "extends": ["config:recommended", "helpers:pinGitHubActionDigests", ":enablePreCommit"],
   "enabledManagers": ["github-actions", "pre-commit", "pep621"],
   "automerge": true,
+  "autoApprove": true,
   "automergeType": "pr",
   "platformAutomerge": true,
   "packageRules": [
