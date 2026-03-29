@@ -21,7 +21,7 @@ description:
  Then determine pools listen socket (see 'listen' directive value).
 
  For example, you want to monitor standard {/run/php/php-fpm.sock} and set up default 'pm.status_path' value '/status'.
- 
+
  Afterwards execute {systemctl restart php-fpm} to apply this change. This makes
  the socket {/run/php/php-fpm.sock} available via fcgi.
  You can test this by requesting this socket via cgi-fcgi CLI tool.

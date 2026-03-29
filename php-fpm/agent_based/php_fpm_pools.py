@@ -63,7 +63,7 @@ def parse_php_fpm_pools(string_table: StringTable) -> Section:
         if len(line) != 4:
             continue  # Skip unexpected lines
         pool_name, pm_type, metric, value = line
-        item = '%s [%s]' % (pool_name, pm_type)
+        item = "%s [%s]" % (pool_name, pm_type)
         if item not in data:
             data[item] = {}
 
@@ -73,7 +73,7 @@ def parse_php_fpm_pools(string_table: StringTable) -> Section:
 
 
 register.agent_section(
-    name='php_fpm_pools',
+    name="php_fpm_pools",
     parse_function=parse_php_fpm_pools,
 )
 
@@ -96,29 +96,33 @@ def check_php_fpm_pools(
 
     data = dict(section[item])
 
-    lower_perfkeys = ['idle_processes']
+    lower_perfkeys = ["idle_processes"]
     upper_perfkeys = [
-        'active_processes', 'max_active_processes', 'max_children_reached',
-        'slow_requests', 'listen_queue', 'max_listen_queue',
+        "active_processes",
+        "max_active_processes",
+        "max_children_reached",
+        "slow_requests",
+        "listen_queue",
+        "max_listen_queue",
     ]
     perfkeys = lower_perfkeys + upper_perfkeys
 
     # Add some more values, derived from the raw ones...
     this_time = int(time.time())
-    for key in ['accepted_conn', 'max_children_reached', 'slow_requests']:
+    for key in ["accepted_conn", "max_children_reached", "slow_requests"]:
         try:
             per_sec = get_rate(
                 get_value_store(),
                 "php_fpm_status.%s" % key,
                 this_time,
                 data[key],
-                raise_overflow=True
+                raise_overflow=True,
             )
         except GetRateError:
             pass
         else:
-            data['%s_per_sec' % key] = per_sec
-            perfkeys.append('%s_per_sec' % key)
+            data["%s_per_sec" % key] = per_sec
+            perfkeys.append("%s_per_sec" % key)
 
     for key in perfkeys:
         if key in lower_perfkeys:
@@ -132,27 +136,30 @@ def check_php_fpm_pools(
             metric_name=key,
             levels_lower=levels_lower,
             levels_upper=levels_upper,
-            label=key.replace('_', ' ').title(),
+            label=key.replace("_", " ").title(),
             render_func=(
-                render.timespan if key == 'start_since'
-                else (lambda x: "%0.2f/s" % x) if key.endswith("_per_sec")
+                render.timespan
+                if key == "start_since"
+                else (lambda x: "%0.2f/s" % x)
+                if key.endswith("_per_sec")
                 else (lambda x: "%d" % x)
             ),
-            notice_only=key not in (
-                'active_processes',
-                'idle_processes',
-                'listen_queue',
-                'start_since',
-                'accepted_conn_per_sec',
+            notice_only=key
+            not in (
+                "active_processes",
+                "idle_processes",
+                "listen_queue",
+                "start_since",
+                "accepted_conn_per_sec",
             ),
         )
 
 
 register.check_plugin(
-    name='php_fpm_pools',
-    service_name='PHP-FPM Pool %s Status',
+    name="php_fpm_pools",
+    service_name="PHP-FPM Pool %s Status",
     discovery_function=discover_php_fpm_pools,
     check_function=check_php_fpm_pools,
-    check_ruleset_name='php_fpm_pools',
+    check_ruleset_name="php_fpm_pools",
     check_default_parameters={},
 )
