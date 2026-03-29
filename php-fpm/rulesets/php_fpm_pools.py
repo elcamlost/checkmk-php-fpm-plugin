@@ -31,7 +31,7 @@ from cmk.rulesets.v1.rule_specs import (
 def _parameter_valuespec_php_fpm_pools():
     return Dictionary(
         elements={
-            "requests_per_sec": DictElement(
+            "accepted_conn_per_sec": DictElement(
                 parameter_form=SimpleLevels[int](
                     title=Title("Request per Second"),
                     help_text=Help(
