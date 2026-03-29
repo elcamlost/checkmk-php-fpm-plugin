@@ -39,6 +39,7 @@ jobs:
     strategy:
       matrix:
         image:
+          - "checkmk/check-mk-raw:2.3.0-latest"
           - "checkmk/check-mk-raw:2.4.0-latest"
           - "checkmk/check-mk-community:2.5.0-latest"
     steps:

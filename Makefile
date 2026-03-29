@@ -9,18 +9,10 @@ MKP = $(shell ls ${PKG}*.mkp 2>/dev/null | head -1)
 package:
 	bash package.sh
 
-test: package _docker_run _install _verify _docker_stop
-
-_docker_run:
+test: package
 	docker run --detach --rm --name=${CONTAINER} ${IMAGE}
 	sleep 10
-
-_docker_stop:
-	docker stop -t 0 ${CONTAINER}
-
-_install:
-	docker cp ${MKP} ${CONTAINER}:/tmp/
-	docker exec -u cmk ${CONTAINER} bash -l -c "mkp add /tmp/${MKP} && mkp enable ${PKG}"
-
-_verify:
-	docker exec -u cmk ${CONTAINER} bash -l -c "mkp list" | grep -q ${PKG}
+	docker cp ${MKP} ${CONTAINER}:/tmp/ && \
+	docker exec -u cmk ${CONTAINER} bash -l -c "mkp add /tmp/${MKP} && mkp enable ${PKG}" && \
+	docker exec -u cmk ${CONTAINER} bash -l -c "mkp list" | grep -q ${PKG}; \
+	EXIT=$$?; docker stop -t 0 ${CONTAINER}; exit $$EXIT

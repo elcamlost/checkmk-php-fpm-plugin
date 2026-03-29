@@ -9,7 +9,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 ## [2.1.0] - 2026-03-29
 
 ### Changed
-- Migrate to Checkmk 2.4 plugin API (`cmk.agent_based.v2`, `cmk.rulesets.v1`, `cmk.graphing.v1`)
+- Migrate to new plugin API (`cmk.agent_based.v2`, `cmk.rulesets.v1`, `cmk.graphing.v1`) — compatible with Checkmk 2.3+
 - Rename check plugin from `php_fpm_pools` to `php_fpm` (service description unchanged — historical data preserved on re-discovery)
 - Replace Docker-based packaging with `package.sh` script
 
@@ -20,7 +20,7 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ### Fixed
 - `accepted_conn_per_sec` levels now correctly applied (key mismatch with ruleset fixed)
-- `version.min_required` set to `2.4.0p1`
+- `version.min_required` set to `2.3.0p1`
 
 ## [2.0.0] - 2025-05-15
 

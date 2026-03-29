@@ -6,7 +6,7 @@ AUTHOR="Ilya Rassadin elcamlost at gmail dot com"
 DESCRIPTION="This check monitors performance indicators of php-fpm pools. See changes here https://raw.githubusercontent.com/elcamlost/checkmk-php-fpm-plugin/master/php-fpm/Changes"
 DOWNLOAD_URL="https://github.com/elcamlost/checkmk-php-fpm-plugin"
 PLUGIN_VERSION="2.1.0"
-CHECKMK_MIN_VERSION="2.4.0p1"
+CHECKMK_MIN_VERSION="2.3.0p1"
 CHECKMK_PKG_VERSION=$CHECKMK_MIN_VERSION
 
 SOURCE_PATH="$(cd "$(dirname "$0")" && pwd)/php-fpm"
