@@ -6,7 +6,7 @@ You can download php-fpm pool monitoring plugin form [CheckMK Exchange](https://
 
 # Upgrading from plugin version 2.0.x
 
-Version 2.1.0 requires Checkmk 2.3.0 or later and renames the internal check plugin from `php_fpm_pools` to `php_fpm`.
+Version 2.1.0 requires Checkmk 2.3.0 or later.
 
 # How to build mkp
 
