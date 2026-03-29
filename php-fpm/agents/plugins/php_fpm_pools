@@ -142,34 +142,36 @@ class FCGIStatusClient:
         self.execute()
         self.close()
 
-    def print_status(self):
-        if hasattr(self, "status_data"):
-            data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1].decode("ascii"))
-            fcgi_pool_name = data.pop("pool", None)
-            pool_name = self.pool_name or fcgi_pool_name
-            pm_type = data.pop("process manager", None)
-            for key in data:
-                spaceless_key = "_".join(key.split())
-                sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, spaceless_key, str(data[key])))
-            return pm_type
-        return None
+    def get_metrics(self):
+        data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1].decode("ascii"))
+        fcgi_pool_name = data.pop("pool", None)
+        pool_name = self.pool_name or fcgi_pool_name
+        pm_type = data.pop("process manager", None)
+        metrics = {"_".join(k.split()): v for k, v in data.items()}
+        return pool_name, pm_type, metrics
 
 
-def parse_includes(filename):
+def _print_status(pool_name, pm_type, metrics):
+    for key, value in metrics.items():
+        sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, key, value))
+
+
+def _parse_includes(filename, root=""):
     """
-    Yield lines in filename, recursively parsing include= lines
+    Yield lines in filename, recursively parsing include= lines.
+    root is prepended to include paths to support filesystem isolation in tests.
     """
     with open(filename, encoding="utf-8", errors="replace") as f:
         for line in f:
             if line.strip().startswith("include"):
                 include = line.split("=", 1)[1].strip()
-                for f in glob(include):
-                    yield from parse_includes(f)
+                for f in glob(root + include):
+                    yield from _parse_includes(f, root=root)
             else:
                 yield line
 
 
-def parse_fpm_config(f):
+def _parse_fpm_config(f):
     """
     Parse php-fpm config, yielding dicts with status socket info
     """
@@ -206,7 +208,7 @@ def parse_fpm_config(f):
         }
 
 
-def make_qualifier(configfile, taken=None):
+def _make_qualifier(configfile, taken=None):
     """
     Return a human-readable qualifier for a config file path.
     Extracts a version number (e.g. "8.1") if present and not already taken.
@@ -220,18 +222,18 @@ def make_qualifier(configfile, taken=None):
     return hashlib.sha256(configfile.encode()).hexdigest()[:8]
 
 
-def get_worker_rss(master_pid, pool_name, proc_root="/proc"):
+def _get_worker_rss(master_pid, pool_name, proc_root="/proc"):
     """
-    Return list of RSS values (in bytes) for worker processes of the given master PID and pool name.
+    Return (total_rss, avg_rss) in bytes for worker processes of the given master PID and pool name,
+    or (None, None) if no workers are found or the children file is missing.
     Workers are identified via the master's children list and their process title.
     """
     rss_values = []
-    total_rss, avg_rss = None, None
     try:
         with open("%s/%d/task/%d/children" % (proc_root, master_pid, master_pid), encoding="utf-8") as fp:
             child_pids = [int(p) for p in fp.read().split() if p]
     except (IOError, OSError, ValueError):
-        return total_rss, avg_rss
+        return None, None
 
     worker_title = "php-fpm: pool %s" % pool_name
     for pid in child_pids:
@@ -246,18 +248,20 @@ def get_worker_rss(master_pid, pool_name, proc_root="/proc"):
                         break
         except (IOError, OSError, ValueError):
             continue
-    if len(rss_values) > 0:
-        total_rss = sum(rss_values)
-        avg_rss = total_rss // len(rss_values) if rss_values else 0
+
+    if not rss_values:
+        return None, None
+    total_rss = sum(rss_values)
+    avg_rss = total_rss // len(rss_values)
     return total_rss, avg_rss
 
 
-def discover_fpm():
+def _discover_fpm(proc_root="/proc"):
     """
     Find running php-fpm processes, yielding (config file path, master PID) tuples
     """
     pattern = re.compile(r"php-fpm: master process \((.*)\)$")
-    for f in glob("/proc/[0-9]*/cmdline"):
+    for f in glob("%s/[0-9]*/cmdline" % proc_root):
         try:
             pid = int(os.path.basename(os.path.dirname(f)))
         except ValueError:
@@ -269,55 +273,65 @@ def discover_fpm():
                 yield match.group(1), pid
 
 
-sys.stdout.write("<<<php_fpm_pools>>>\n")
+def main(root="/"):
+    root = root.rstrip("/")
+    proc_root = root + "/proc"
 
-# Pass 1: collect all pools from all running php-fpm instances
-all_pools = []  # list of (configfile, fpm_status)
-master_pids = {}  # configfile -> master PID
-for configfile, master_pid in discover_fpm():
-    for fpm_status in parse_fpm_config(parse_includes(configfile)):
-        if fpm_status.get("path"):
-            all_pools.append((configfile, fpm_status))
-            master_pids[configfile] = master_pid
+    sys.stdout.write("<<<php_fpm_pools>>>\n")
 
-# Pass 2: detect duplicate pool names and assign unique qualifiers
-pool_name_counts = {}
-for _, fpm_status in all_pools:
-    name = fpm_status["pool_name"]
-    pool_name_counts[name] = pool_name_counts.get(name, 0) + 1
-duplicate_pool_names = {name for name, count in pool_name_counts.items() if count > 1}
+    # Pass 1: collect all pools from all running php-fpm instances
+    all_pools = []  # list of (configfile, fpm_status)
+    master_pids = {}  # configfile -> master PID
+    for configfile, master_pid in _discover_fpm(proc_root):
+        for fpm_status in _parse_fpm_config(_parse_includes(root + configfile, root=root)):
+            if fpm_status.get("path"):
+                all_pools.append((configfile, fpm_status))
+                master_pids[configfile] = master_pid
 
-used_qualifiers = {}  # pool_name -> set of qualifiers already assigned
-qualifiers = {}  # configfile -> qualifier
-for configfile, fpm_status in all_pools:
-    if fpm_status["pool_name"] not in duplicate_pool_names:
-        continue
-    if configfile in qualifiers:
-        continue
-    taken = used_qualifiers.setdefault(fpm_status["pool_name"], set())
-    qualifier = make_qualifier(configfile, taken=taken)
-    taken.add(qualifier)
-    qualifiers[configfile] = qualifier
+    # Pass 2: detect duplicate pool names and assign unique qualifiers
+    pool_name_counts = {}
+    for _, fpm_status in all_pools:
+        name = fpm_status["pool_name"]
+        pool_name_counts[name] = pool_name_counts.get(name, 0) + 1
+    duplicate_pool_names = {name for name, count in pool_name_counts.items() if count > 1}
 
-# Pass 3: connect to each pool and output metrics
-for configfile, fpm_status in all_pools:
-    pool_name = fpm_status["pool_name"]
-    if pool_name in duplicate_pool_names:
-        display_name = "%s@%s" % (pool_name, qualifiers[configfile])
-    else:
-        display_name = pool_name
-    try:
-        fcgi_client = FCGIStatusClient(
-            socket_path=fpm_status.get("socket"),
-            status_path=fpm_status.get("path", "/status"),
-            pool_name=display_name,
-        )
-        fcgi_client.make_request()
-        pm_type = fcgi_client.print_status()
-        total_rss, avg_rss = get_worker_rss(master_pids[configfile], pool_name)
-        if total_rss is not None and avg_rss is not None:
-            sys.stdout.write("%s %s memory_total_rss %d\n" % (display_name, pm_type, total_rss))
-            sys.stdout.write("%s %s memory_avg_rss %d\n" % (display_name, pm_type, avg_rss))
+    used_qualifiers = {}  # pool_name -> set of qualifiers already assigned
+    qualifiers = {}  # configfile -> qualifier
+    for configfile, fpm_status in all_pools:
+        if fpm_status["pool_name"] not in duplicate_pool_names:
+            continue
+        if configfile in qualifiers:
+            continue
+        taken = used_qualifiers.setdefault(fpm_status["pool_name"], set())
+        qualifier = _make_qualifier(configfile, taken=taken)
+        taken.add(qualifier)
+        qualifiers[configfile] = qualifier
 
-    except Exception as e:
-        sys.stderr.write("Exception (%s): %s\n" % (fpm_status.get("socket"), e))
+    # Pass 3: connect to each pool and output metrics
+    for configfile, fpm_status in all_pools:
+        pool_name = fpm_status["pool_name"]
+        if pool_name in duplicate_pool_names:
+            display_name = "%s@%s" % (pool_name, qualifiers[configfile])
+        else:
+            display_name = pool_name
+        try:
+            fcgi_client = FCGIStatusClient(
+                socket_path=fpm_status.get("socket"),
+                status_path=fpm_status.get("path", "/status"),
+                pool_name=display_name,
+            )
+            fcgi_client.make_request()
+            pool_name_out, pm_type, metrics = fcgi_client.get_metrics()
+
+            total_rss, avg_rss = _get_worker_rss(master_pids[configfile], pool_name, proc_root=proc_root)
+            if total_rss is not None:
+                metrics["memory_total_rss"] = total_rss
+                metrics["memory_avg_rss"] = avg_rss
+            _print_status(pool_name_out, pm_type, metrics)
+
+        except Exception as e:
+            sys.stderr.write("Exception (%s): %s\n" % (fpm_status.get("socket"), e))
+
+
+if __name__ == "__main__":  # pragma: no cover
+    main()
