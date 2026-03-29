@@ -58,7 +58,7 @@ class FCGIStatusClient:
     # FCGI header length
     FCGI_HEADER_LENGTH = 8
 
-    def __init__(self, socket_path, socket_timeout = 5.0, status_path = "/status" ):
+    def __init__(self, socket_path, socket_timeout=5.0, status_path="/status"):
         # socket_path of type tuple is TCP
         if type(socket_path) is tuple:
             self.socket = socket.create_connection(socket_path, socket_timeout)
@@ -70,10 +70,10 @@ class FCGIStatusClient:
         self.request_id = 1
 
         self.params = {
-            'SCRIPT_NAME': status_path,
-            'SCRIPT_FILENAME': status_path,
-            'QUERY_STRING': 'json',
-            'REQUEST_METHOD': 'GET',
+            "SCRIPT_NAME": status_path,
+            "SCRIPT_FILENAME": status_path,
+            "QUERY_STRING": "json",
+            "REQUEST_METHOD": "GET",
         }
 
     def close(self):
@@ -81,7 +81,14 @@ class FCGIStatusClient:
 
     def define_begin_request(self):
         fcgi_begin_request = struct.pack("!HB5x", self.FCGI_RESPONDER, 0)
-        fcgi_header        = struct.pack("!BBHHBx", self.FCGI_VERSION, self.FCGI_BEGIN_REQUEST, self.request_id, len(fcgi_begin_request), 0)
+        fcgi_header = struct.pack(
+            "!BBHHBx",
+            self.FCGI_VERSION,
+            self.FCGI_BEGIN_REQUEST,
+            self.request_id,
+            len(fcgi_begin_request),
+            0,
+        )
         self.fcgi_begin_request = fcgi_header + fcgi_begin_request
 
     def define_parameters(self):
@@ -89,14 +96,28 @@ class FCGIStatusClient:
         for name, value in self.params.items():
             parameters.append(chr(len(name)) + chr(len(value)) + name + value)
 
-        parameters             = ''.join(parameters)
-        parameters_length      = len(parameters)
+        parameters = "".join(parameters)
+        parameters_length = len(parameters)
         parameters_padding_req = parameters_length & 7
-        parameters_padding     = b'\x00' * parameters_padding_req
+        parameters_padding = b"\x00" * parameters_padding_req
 
-        fcgi_header_start = struct.pack("!BBHHBx", self.FCGI_VERSION, self.FCGI_PARAMS, self.request_id, parameters_length , parameters_padding_req)
-        fcgi_header_end   = struct.pack("!BBHHBx", self.FCGI_VERSION, self.FCGI_PARAMS, self.request_id, 0, 0)
-        self.fcgi_params = fcgi_header_start  + parameters.encode() + parameters_padding + fcgi_header_end
+        fcgi_header_start = struct.pack(
+            "!BBHHBx",
+            self.FCGI_VERSION,
+            self.FCGI_PARAMS,
+            self.request_id,
+            parameters_length,
+            parameters_padding_req,
+        )
+        fcgi_header_end = struct.pack(
+            "!BBHHBx", self.FCGI_VERSION, self.FCGI_PARAMS, self.request_id, 0, 0
+        )
+        self.fcgi_params = (
+            fcgi_header_start
+            + parameters.encode()
+            + parameters_padding
+            + fcgi_header_end
+        )
 
     def execute(self):
         self.status_data = b""
@@ -105,20 +126,25 @@ class FCGIStatusClient:
 
         while True:
             header = self.socket.recv(self.FCGI_HEADER_LENGTH)
-            fcgi_version, request_type, request_id, request_length, request_padding = struct.unpack("!BBHHBx", header)
+            fcgi_version, request_type, request_id, request_length, request_padding = (
+                struct.unpack("!BBHHBx", header)
+            )
 
             if request_type == 3:
                 break
             elif request_type in (6, 7):
                 raw_status_data = b""
                 while len(raw_status_data) < request_length:
-                    raw_status_data += self.socket.recv(request_length - len(raw_status_data))
+                    raw_status_data += self.socket.recv(
+                        request_length - len(raw_status_data)
+                    )
                 self.socket.recv(request_padding)
                 self.status_data += raw_status_data
 
             if request_type == 7:
-                raise Exception("Received an error packet: " +
-                self.status_data.decode('ascii'))
+                raise Exception(
+                    "Received an error packet: " + self.status_data.decode("ascii")
+                )
             elif request_type not in (3, 6):
                 raise Exception("Received unexpected packet type: " + str(request_type))
 
@@ -129,13 +155,16 @@ class FCGIStatusClient:
         self.close()
 
     def print_status(self):
-        if hasattr(self, 'status_data'):
-            data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1].decode('ascii'))
-            pool_name = data.pop('pool', None)
-            pm_type = data.pop('process manager', None)
+        if hasattr(self, "status_data"):
+            data = json.loads(self.status_data.split(b"\r\n\r\n", 1)[1].decode("ascii"))
+            pool_name = data.pop("pool", None)
+            pm_type = data.pop("process manager", None)
             for key in data:
-                spaceless_key = "_".join( key.split() )
-                sys.stdout.write("%s %s %s %s\n" % (pool_name, pm_type, spaceless_key, str(data[key])))
+                spaceless_key = "_".join(key.split())
+                sys.stdout.write(
+                    "%s %s %s %s\n"
+                    % (pool_name, pm_type, spaceless_key, str(data[key]))
+                )
 
 
 def parse_includes(filename):
@@ -144,8 +173,8 @@ def parse_includes(filename):
     """
     with open(filename) as f:
         for line in f:
-            if line.strip().startswith('include'):
-                include = line.split('=', 1)[1].strip()
+            if line.strip().startswith("include"):
+                include = line.split("=", 1)[1].strip()
                 for f in glob(include):
                     yield from parse_includes(f)
             else:
@@ -162,25 +191,27 @@ def parse_fpm_config(f):
 
     for name in config.sections():
         section = config[name]
-        if 'listen' not in section:
+        if "listen" not in section:
             continue
 
-        listen = section['listen'].strip(strip_from_listen)
-        if listen and not listen.startswith('/'):
-            if 'prefix' in section:
-                listen = os.path.join(section['prefix'].strip(strip_from_listen), listen)
+        listen = section["listen"].strip(strip_from_listen)
+        if listen and not listen.startswith("/"):
+            if "prefix" in section:
+                listen = os.path.join(
+                    section["prefix"].strip(strip_from_listen), listen
+                )
             else:
                 # we cannot infer the relative listen anchor
                 continue
 
         if listen:
-            listen = listen.replace('$pool', name)
+            listen = listen.replace("$pool", name)
 
         yield {
             "socket": listen,
             "path": (
-                section['pm.status_path'].strip(strip_from_listen)
-                if 'pm.status_path' in section
+                section["pm.status_path"].strip(strip_from_listen)
+                if "pm.status_path" in section
                 else None
             ),
         }
@@ -190,24 +221,27 @@ def discover_fpm():
     """
     Find running php-fpm processes, yielding their config file paths
     """
-    pattern = re.compile(r'php-fpm: master process \((.*)\)$')
-    for f in glob('/proc/[0-9]*/cmdline'):
+    pattern = re.compile(r"php-fpm: master process \((.*)\)$")
+    for f in glob("/proc/[0-9]*/cmdline"):
         with open(f) as fp:
             cmdline = fp.readline()
-            match = pattern.match(cmdline.strip('\0'))
+            match = pattern.match(cmdline.strip("\0"))
             if match:
                 yield match.group(1)
 
 
-sys.stdout.write('<<<php_fpm_pools>>>\n')
+sys.stdout.write("<<<php_fpm_pools>>>\n")
 for configfile in discover_fpm():
     for fpm_status in parse_fpm_config(parse_includes(configfile)):
-        if not fpm_status.get('path'):
+        if not fpm_status.get("path"):
             continue
         try:
-            fcgi_client = FCGIStatusClient( socket_path = fpm_status.get('socket'), status_path = fpm_status.get('path', '/status') )
+            fcgi_client = FCGIStatusClient(
+                socket_path=fpm_status.get("socket"),
+                status_path=fpm_status.get("path", "/status"),
+            )
             fcgi_client.make_request()
             fcgi_client.print_status()
 
         except Exception as e:
-            sys.stderr.write('Exception (%s): %s\n' % (fpm_status.get('socket'), e))
+            sys.stderr.write("Exception (%s): %s\n" % (fpm_status.get("socket"), e))
