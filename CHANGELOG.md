@@ -6,6 +6,11 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
 ## [Unreleased]
 
+## [2.3.1] - 2026-04-12
+
+### Fixed
+- Pools listening on TCP sockets (`host:port`) are now discovered and monitored ([#44](https://github.com/elcamlost/checkmk-php-fpm-plugin/pull/44))
+
 ## [2.3.0] - 2026-03-29
 
 ### Added
