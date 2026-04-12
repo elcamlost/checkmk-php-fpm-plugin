@@ -7,7 +7,8 @@ from tests.conftest import (
     make_master,
     make_pool_config,
     make_worker,
-    patch_sockets,
+    patch_tcp_sockets,
+    patch_unix_sockets,
 )
 
 POOL_STATUS = {
@@ -28,7 +29,7 @@ POOL_STATUS = {
 
 
 def run_main(tmp_path, responses):
-    with patch_sockets(responses):
+    with patch_unix_sockets(responses):
         agent.main(root=str(tmp_path))
 
 
@@ -316,6 +317,104 @@ class TestStatusListenSocket:
 
         metrics = {f[2] for f in parsed_lines(capsys.readouterr().out)}
         assert "active_processes" in metrics
+
+
+# ---------------------------------------------------------------------------
+# TestIncludes
+# ---------------------------------------------------------------------------
+
+
+# ---------------------------------------------------------------------------
+# TestTCPSocketParsing
+# ---------------------------------------------------------------------------
+
+
+class TestTCPSocketParsing:
+    """
+    Pools configured with listen = host:port (TCP) must be discovered.
+    Before the fix these pools were silently skipped because a non-path listen
+    value without a prefix= directive hit a 'continue' in _parse_fpm_config.
+    """
+
+    def test_pool_with_ip_port_listen_is_discovered(self, tmp_path, capsys):
+        make_master(tmp_path, master_pid=100, config_path="/etc/php-fpm.conf", worker_pids=[])
+        make_pool_config(tmp_path, "/etc/php-fpm.conf", [{"name": "www", "listen": "127.0.0.1:9000"}])
+        with patch_tcp_sockets({("127.0.0.1", "9000"): POOL_STATUS}):
+            agent.main(root=str(tmp_path))
+
+        pool_names = {f[0] for f in parsed_lines(capsys.readouterr().out)}
+        assert "www" in pool_names
+
+    def test_pool_with_wildcard_ip_listen_is_discovered(self, tmp_path, capsys):
+        make_master(tmp_path, master_pid=100, config_path="/etc/php-fpm.conf", worker_pids=[])
+        make_pool_config(tmp_path, "/etc/php-fpm.conf", [{"name": "www", "listen": "0.0.0.0:9000"}])
+        with patch_tcp_sockets({("0.0.0.0", "9000"): POOL_STATUS}):
+            agent.main(root=str(tmp_path))
+
+        pool_names = {f[0] for f in parsed_lines(capsys.readouterr().out)}
+        assert "www" in pool_names
+
+    def test_tcp_pool_emits_metrics(self, tmp_path, capsys):
+        make_master(tmp_path, master_pid=100, config_path="/etc/php-fpm.conf", worker_pids=[])
+        make_pool_config(tmp_path, "/etc/php-fpm.conf", [{"name": "www", "listen": "127.0.0.1:9000"}])
+        with patch_tcp_sockets({("127.0.0.1", "9000"): POOL_STATUS}):
+            agent.main(root=str(tmp_path))
+
+        metrics = {f[2] for f in parsed_lines(capsys.readouterr().out)}
+        for expected in ("active_processes", "idle_processes", "listen_queue", "accepted_conn"):
+            assert expected in metrics
+
+    def test_tcp_pool_with_status_listen_uses_override_address(self, tmp_path, capsys):
+        make_master(tmp_path, master_pid=100, config_path="/etc/php-fpm.conf", worker_pids=[])
+        make_pool_config(
+            tmp_path,
+            "/etc/php-fpm.conf",
+            [{"name": "www", "listen": "127.0.0.1:9000", "status_listen": "127.0.0.1:9001"}],
+        )
+        with patch_tcp_sockets({("127.0.0.1", "9001"): POOL_STATUS}):
+            agent.main(root=str(tmp_path))
+
+        pool_names = {f[0] for f in parsed_lines(capsys.readouterr().out)}
+        assert "www" in pool_names
+
+    def test_tcp_and_unix_pools_both_discovered(self, tmp_path, capsys):
+        make_master(tmp_path, master_pid=100, config_path="/etc/php-fpm.conf", worker_pids=[])
+        make_pool_config(
+            tmp_path,
+            "/etc/php-fpm.conf",
+            [
+                {"name": "unix_pool", "listen": "/run/php-fpm.sock"},
+                {"name": "tcp_pool", "listen": "127.0.0.1:9000"},
+            ],
+        )
+        unix_response = {**POOL_STATUS, "pool": "unix_pool"}
+        tcp_response = {**POOL_STATUS, "pool": "tcp_pool"}
+        unix_bytes = {"/run/php-fpm.sock": unix_response}
+        tcp_bytes = {("127.0.0.1", "9000"): tcp_response}
+
+        from unittest.mock import patch as _patch
+
+        from tests.conftest import FakeFCGISocket, make_fcgi_response
+
+        unix_response_bytes = {path: make_fcgi_response(data) for path, data in unix_bytes.items()}
+        tcp_response_bytes = {addr: make_fcgi_response(data) for addr, data in tcp_bytes.items()}
+
+        def socket_factory(*args, **kwargs):
+            return FakeFCGISocket(unix_response_bytes)
+
+        def create_connection_factory(address, timeout=None):
+            sock = FakeFCGISocket(tcp_response_bytes)
+            sock._data = tcp_response_bytes[address]
+            sock._pos = 0
+            return sock
+
+        with _patch("php_fpm_pools_agent.socket.socket", side_effect=socket_factory):
+            with _patch("php_fpm_pools_agent.socket.create_connection", side_effect=create_connection_factory):
+                agent.main(root=str(tmp_path))
+
+        pool_names = {f[0] for f in parsed_lines(capsys.readouterr().out)}
+        assert "unix_pool" in pool_names
+        assert "tcp_pool" in pool_names
 
 
 # ---------------------------------------------------------------------------

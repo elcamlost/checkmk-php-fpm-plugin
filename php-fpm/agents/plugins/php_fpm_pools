@@ -188,9 +188,6 @@ def _parse_fpm_config(f):
         if listen and not listen.startswith("/"):
             if "prefix" in section:
                 listen = os.path.join(section["prefix"].strip(strip_from_listen), listen)
-            else:
-                # we cannot infer the relative listen anchor
-                continue
 
         status_listen = section.get("pm.status_listen", "").strip(strip_from_listen)
         if status_listen:
@@ -200,6 +197,9 @@ def _parse_fpm_config(f):
 
         if socket:
             socket = socket.replace("$pool", name)
+
+        if ":" in socket:
+            socket = tuple(socket.split(":"))
 
         yield {
             "pool_name": name,
