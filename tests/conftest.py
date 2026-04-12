@@ -171,7 +171,7 @@ class FakeFCGISocket:
 
 
 @contextmanager
-def patch_sockets(responses):
+def patch_unix_sockets(responses):
     """
     Context manager that patches socket.socket in the agent module.
     responses: {socket_path: status_dict}
@@ -182,4 +182,22 @@ def patch_sockets(responses):
         return FakeFCGISocket(response_bytes)
 
     with patch("php_fpm_pools_agent.socket.socket", side_effect=socket_factory):
+        yield
+
+
+@contextmanager
+def patch_tcp_sockets(responses):
+    """
+    Context manager that patches socket.create_connection in the agent module.
+    responses: {(host, port): status_dict}  — keys must be tuples matching the parsed listen address.
+    """
+    response_bytes = {addr: make_fcgi_response(data) for addr, data in responses.items()}
+
+    def create_connection_factory(address, timeout=None):
+        sock = FakeFCGISocket(response_bytes)
+        sock._data = response_bytes[address]
+        sock._pos = 0
+        return sock
+
+    with patch("php_fpm_pools_agent.socket.create_connection", side_effect=create_connection_factory):
         yield
